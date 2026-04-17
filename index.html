@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="theme-color" content="#f1ead8"/>
+<title>ADICTO Reports</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  html, body { margin: 0; padding: 0; background: #f1ead8; min-height: 100vh; }
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    color: #1a1510;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  * { box-sizing: border-box; }
+  button:focus { outline: none; }
+  ::-webkit-scrollbar { display: none; }
+
+  /* Desktop fallback — для перегляду з комп'ютера */
+  @media (min-width: 520px) {
+    body { padding: 24px 0; }
+    #root { max-width: 420px; margin: 0 auto; background: #f1ead8;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 20px 60px rgba(0,0,0,0.12);
+      border-radius: 28px; overflow: hidden; min-height: calc(100vh - 48px); }
+  }
+  /* Mobile (як PWA) — full screen */
+  @media (max-width: 519px) {
+    #root { min-height: 100vh; }
+  }
+</style>
+
+<script>
+  // Конфіг: Google Apps Script endpoint
+  window.ADICTO_CONFIG = {
+    apiUrl: 'https://script.google.com/macros/s/AKfycbwD65o7RNMwU1QSVtJqrEEJCQjB-O1Zo3DrzGRvnTHDS7XXQsgKcQ3xAFJIQG4xyNW4fQ/exec',
+  };
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root">
+  <div style="padding:80px 40px;text-align:center;font-family:'JetBrains Mono',monospace;color:#8a7d69;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;">Loading…</div>
+</div>
+
+<script src="./bundle.js" defer></script>
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+</body>
+</html>
