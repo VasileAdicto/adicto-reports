@@ -1,4 +1,3 @@
-
 ;(function(){
 // Chart primitives — minimal editorial style.
 // SVG-based, sized responsively within their container.
@@ -353,7 +352,7 @@ function BarsV({
         height: seg,
         fill: colors[ki]
       });
-    }), showVals && totals[i] > 0 && !showY && /*#__PURE__*/React.createElement("text", {
+    }), showVals && totals[i] > 0 && /*#__PURE__*/React.createElement("text", {
       x: x + w / 2,
       y: topPad + plotH - totals[i] / max * plotH - 4,
       fontSize: "8.5",
@@ -378,7 +377,9 @@ function AreaChart({
   h = 140,
   color = PALETTE.ink,
   monthTicks = true,
-  showY = false
+  showY = false,
+  showPeaks = false,
+  peakFormatter
 }) {
   if (!data || !data.length) return /*#__PURE__*/React.createElement(EmptyChart, {
     h: h
@@ -470,7 +471,27 @@ function AreaChart({
     cy: p[1],
     r: "2",
     fill: color
-  })), monthLabels.map((m, i) => /*#__PURE__*/React.createElement("g", {
+  })), showPeaks && pts.map((p, i) => {
+    const v = values[i];
+    if (v <= 0) return null;
+    const prev = values[i - 1] ?? -Infinity;
+    const next = values[i + 1] ?? -Infinity;
+    // Показуємо тільки на ВИРАЗНИХ локальних максимумах (строго більше сусідів)
+    // і на першій/останній точці якщо вона — максимум
+    const isPeak = v > prev && v >= next || v >= prev && v > next;
+    if (!isPeak) return null;
+    const label = peakFormatter ? peakFormatter(v) : fmt(v);
+    return /*#__PURE__*/React.createElement("text", {
+      key: 'pk' + i,
+      x: p[0],
+      y: p[1] - 5,
+      fontSize: "8.5",
+      fontFamily: CH_MONO,
+      fill: PALETTE.ink,
+      fontWeight: "600",
+      textAnchor: "middle"
+    }, label);
+  }), monthLabels.map((m, i) => /*#__PURE__*/React.createElement("g", {
     key: i
   }, /*#__PURE__*/React.createElement("line", {
     x1: m.x,
@@ -602,7 +623,317 @@ window.CHARTS = {
   PALETTE
 };
 })();
+;(function(){
+// DataStore — єдине джерело даних застосунку.
+// Стратегія:
+//   1. На init читає кеш з localStorage → одразу показує дані (навіть офлайн).
+//   2. Робить fetch до Apps Script endpoint в фоні.
+//   3. Коли прийшла відповідь — оновлює стан + пише новий кеш.
+//
+// Формат відповіді від скрипта:
+//   { updated: ISO, sales: {headers, rows}, traffic: {headers, rows} }
 
+const API_URL = window.ADICTO_CONFIG?.apiUrl || '';
+const CACHE_KEY = 'adicto.data.v1';
+const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 днів — просто граничне значення
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.payload || !parsed?.savedAt) return null;
+    if (Date.now() - parsed.savedAt > CACHE_MAX_AGE_MS) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+function saveCache(payload) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      payload
+    }));
+  } catch (e) {
+    console.warn('Cache write failed', e);
+  }
+}
+function useDataStore() {
+  const cached = React.useMemo(loadCache, []);
+  const [state, setState] = React.useState({
+    payload: cached?.payload || null,
+    savedAt: cached?.savedAt || null,
+    loading: !!API_URL,
+    error: null,
+    source: cached ? 'cache' : null
+  });
+  const refresh = React.useCallback(async () => {
+    if (!API_URL) {
+      setState(s => ({
+        ...s,
+        loading: false,
+        error: 'API_URL not configured'
+      }));
+      return;
+    }
+    setState(s => ({
+      ...s,
+      loading: true,
+      error: null
+    }));
+    try {
+      const res = await fetch(API_URL, {
+        redirect: 'follow'
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const payload = await res.json();
+      saveCache(payload);
+      setState({
+        payload,
+        savedAt: Date.now(),
+        loading: false,
+        error: null,
+        source: 'live'
+      });
+    } catch (e) {
+      console.error('Fetch failed', e);
+      setState(s => ({
+        ...s,
+        loading: false,
+        error: e.message || 'Fetch failed'
+        // залишаємо кешований payload, якщо був
+      }));
+    }
+  }, []);
+  React.useEffect(() => {
+    if (API_URL) refresh();
+  }, [refresh]);
+  return {
+    ...state,
+    refresh
+  };
+}
+window.DATA_STORE = {
+  useDataStore
+};
+})();
+;(function(){
+// LoginGate — простий email+пароль gate.
+// Credentials хардкодом (немає сервера). Для 2 користувачів цього достатньо.
+// Зберігає сесію в localStorage після успішного входу.
+
+const CREDENTIALS = [{
+  email: 'vasile@adicto.bike',
+  password: 'Scalpel2012!'
+}, {
+  email: 'maximiva@gmail.com',
+  password: 'Tornado80!'
+}, {
+  email: 'olegivanov578@gmail.com',
+  password: 'Tornado80!'
+}];
+const SESSION_KEY = 'adicto.session.v1';
+const SESSION_MAX_AGE_DAYS = 365;
+function checkSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    const ageDays = (Date.now() - s.loggedAt) / (1000 * 60 * 60 * 24);
+    if (ageDays > SESSION_MAX_AGE_DAYS) return null;
+    if (!CREDENTIALS.find(c => c.email === s.email)) return null; // email більше не існує
+    // Rolling session: оновлюємо loggedAt при кожному заході — сесія живе вічно
+    // поки користувач заходить раз на рік.
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        email: s.email,
+        loggedAt: Date.now()
+      }));
+    } catch {}
+    return s;
+  } catch {
+    return null;
+  }
+}
+function setSession(email) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({
+    email,
+    loggedAt: Date.now()
+  }));
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function LoginScreen({
+  onLogin
+}) {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState(null);
+  const PALETTE = window.CHARTS.PALETTE;
+  const MONO = '"JetBrains Mono", ui-monospace, monospace';
+  const submit = e => {
+    e.preventDefault();
+    const em = email.trim().toLowerCase();
+    const match = CREDENTIALS.find(c => c.email.toLowerCase() === em && c.password === password);
+    if (!match) {
+      setError('Невірний email або пароль');
+      return;
+    }
+    setSession(match.email);
+    onLogin(match.email);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      fontFamily: MONO
+    }
+  }, /*#__PURE__*/React.createElement("form", {
+    onSubmit: submit,
+    style: {
+      width: '100%',
+      maxWidth: 320,
+      background: '#fffbf0',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 16,
+      padding: 28
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9.5,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: PALETTE.muted,
+      marginBottom: 6
+    }
+  }, "ADICTO.BIKE"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 24,
+      letterSpacing: -0.6,
+      lineHeight: 1,
+      textTransform: 'uppercase',
+      color: PALETTE.ink,
+      fontWeight: 600,
+      marginBottom: 22
+    }
+  }, "REPORTS"), /*#__PURE__*/React.createElement(Label, null, "Email"), /*#__PURE__*/React.createElement(Field, {
+    value: email,
+    onChange: setEmail,
+    type: "email",
+    autoFocus: true,
+    placeholder: "name@adicto.bike"
+  }), /*#__PURE__*/React.createElement(Label, null, "Password"), /*#__PURE__*/React.createElement(Field, {
+    value: password,
+    onChange: setPassword,
+    type: "password",
+    placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+  }), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: '#c47862',
+      letterSpacing: 0.4,
+      marginTop: 10,
+      padding: '8px 10px',
+      background: '#fdf0eb',
+      borderRadius: 8
+    }
+  }, "\u26A0 ", error), /*#__PURE__*/React.createElement("button", {
+    type: "submit",
+    style: {
+      width: '100%',
+      marginTop: 18,
+      padding: '12px 16px',
+      background: PALETTE.ink,
+      color: '#f1ead8',
+      border: 'none',
+      borderRadius: 10,
+      cursor: 'pointer',
+      fontFamily: MONO,
+      fontSize: 11,
+      letterSpacing: 1.4,
+      textTransform: 'uppercase',
+      fontWeight: 500
+    }
+  }, "\u0423\u0432\u0456\u0439\u0442\u0438"), /*#__PURE__*/React.createElement("a", {
+    href: "mailto:vasile@adicto.bike?subject=Reports%20%E2%80%94%20%D0%B2%D1%96%D0%B4%D0%BD%D0%BE%D0%B2%D0%B8%D1%82%D0%B8%20%D0%BF%D0%B0%D1%80%D0%BE%D0%BB%D1%8C&body=%D0%9F%D1%80%D0%BE%D1%88%D1%83%20%D0%B2%D1%96%D0%B4%D0%BD%D0%BE%D0%B2%D0%B8%D1%82%D0%B8%20%D0%BF%D0%B0%D1%80%D0%BE%D0%BB%D1%8C%20%D0%B4%D0%BB%D1%8F%3A%20",
+    style: {
+      display: 'block',
+      textAlign: 'center',
+      marginTop: 14,
+      fontSize: 10,
+      letterSpacing: 0.6,
+      color: PALETTE.subtle,
+      textDecoration: 'underline',
+      textUnderlineOffset: 3
+    }
+  }, "\u0417\u0430\u0431\u0443\u0432 \u043F\u0430\u0440\u043E\u043B\u044C"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      fontSize: 9,
+      color: PALETTE.muted,
+      letterSpacing: 0.4,
+      textAlign: 'center',
+      lineHeight: 1.5
+    }
+  }, "\u0421\u0435\u0441\u0456\u044F \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044C\u0441\u044F \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457 \u2014", /*#__PURE__*/React.createElement("br", null), "\u043D\u0435 \u043F\u043E\u0442\u0440\u0456\u0431\u043D\u043E \u0437\u0430\u0445\u043E\u0434\u0438\u0442\u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E.")));
+}
+function Label({
+  children
+}) {
+  const PALETTE = window.CHARTS.PALETTE;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: PALETTE.muted,
+      marginTop: 14,
+      marginBottom: 6
+    }
+  }, children);
+}
+function Field({
+  value,
+  onChange,
+  type,
+  autoFocus,
+  placeholder
+}) {
+  const PALETTE = window.CHARTS.PALETTE;
+  const MONO = '"JetBrains Mono", ui-monospace, monospace';
+  return /*#__PURE__*/React.createElement("input", {
+    type: type,
+    value: value,
+    onChange: e => onChange(e.target.value),
+    autoFocus: autoFocus,
+    placeholder: placeholder,
+    autoComplete: type === 'password' ? 'current-password' : 'email',
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      background: '#f1ead8',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 8,
+      fontFamily: MONO,
+      fontSize: 13,
+      color: PALETTE.ink,
+      outline: 'none',
+      boxSizing: 'border-box'
+    }
+  });
+}
+window.AUTH = {
+  LoginScreen,
+  checkSession,
+  clearSession,
+  CREDENTIALS
+};
+})();
 ;(function(){
 // Aggregator — перетворює raw rows з Google Sheets у метрики для UI.
 
@@ -859,12 +1190,16 @@ function aggregateSales(rows, opts = {}) {
   });
   const weekDocsCount = weekDocsSum.size;
   const weekGrossTotal = [...weekDocsSum.values()].reduce((a, b) => a + b, 0);
+  // Середній чек для Overview — з тим самим фільтром maxCheck, що й глобальний
+  const weekDocsFiltered = [...weekDocsSum.values()].filter(v => v < maxCheck);
+  const weekAvgCheck = weekDocsFiltered.length ? weekDocsFiltered.reduce((a, b) => a + b, 0) / weekDocsFiltered.length : 0;
   const currentWeek = {
     gross: weekRecords.reduce((a, r) => a + r.gross, 0),
     profit: weekRecords.reduce((a, r) => a + r.profit, 0),
     count: weekRecords.length,
     docs: weekDocsCount,
-    avgCheck: weekDocsCount > 0 ? weekGrossTotal / weekDocsCount : 0,
+    avgCheck: weekAvgCheck,
+    avgCheckDocs: weekDocsFiltered.length,
     range: weekRecords.length ? {
       from: wkStart,
       to: latest
@@ -1449,11 +1784,11 @@ function aggregateTraffic(rows, opts = {}) {
     to: new Date(Math.max(...dates))
   } : null;
 
-  // visitsByDate для Ratio
+  // visitsByDate для Ratio — використовуємо ту саму вагу (0.5 на рядок), щоб сумма = totalVisitors
   const visitsByDate = {};
   enterRecords.forEach(r => {
     const k = dateKey(r.date);
-    visitsByDate[k] = (visitsByDate[k] || 0) + 1;
+    visitsByDate[k] = (visitsByDate[k] || 0) + r.enter;
   });
 
   // Peak hour: з hourlyByDay['all']
@@ -1567,103 +1902,6 @@ window.AGGREGATOR = {
   WEEK_UA_FULL
 };
 })();
-
-;(function(){
-// DataStore — єдине джерело даних застосунку.
-// Стратегія:
-//   1. На init читає кеш з localStorage → одразу показує дані (навіть офлайн).
-//   2. Робить fetch до Apps Script endpoint в фоні.
-//   3. Коли прийшла відповідь — оновлює стан + пише новий кеш.
-//
-// Формат відповіді від скрипта:
-//   { updated: ISO, sales: {headers, rows}, traffic: {headers, rows} }
-
-const API_URL = window.ADICTO_CONFIG?.apiUrl || '';
-const CACHE_KEY = 'adicto.data.v1';
-const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 днів — просто граничне значення
-
-function loadCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.payload || !parsed?.savedAt) return null;
-    if (Date.now() - parsed.savedAt > CACHE_MAX_AGE_MS) return null;
-    return parsed;
-  } catch (e) {
-    return null;
-  }
-}
-function saveCache(payload) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      savedAt: Date.now(),
-      payload
-    }));
-  } catch (e) {
-    console.warn('Cache write failed', e);
-  }
-}
-function useDataStore() {
-  const cached = React.useMemo(loadCache, []);
-  const [state, setState] = React.useState({
-    payload: cached?.payload || null,
-    savedAt: cached?.savedAt || null,
-    loading: !!API_URL,
-    error: null,
-    source: cached ? 'cache' : null
-  });
-  const refresh = React.useCallback(async () => {
-    if (!API_URL) {
-      setState(s => ({
-        ...s,
-        loading: false,
-        error: 'API_URL not configured'
-      }));
-      return;
-    }
-    setState(s => ({
-      ...s,
-      loading: true,
-      error: null
-    }));
-    try {
-      const res = await fetch(API_URL, {
-        redirect: 'follow'
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const payload = await res.json();
-      saveCache(payload);
-      setState({
-        payload,
-        savedAt: Date.now(),
-        loading: false,
-        error: null,
-        source: 'live'
-      });
-    } catch (e) {
-      console.error('Fetch failed', e);
-      setState(s => ({
-        ...s,
-        loading: false,
-        error: e.message || 'Fetch failed'
-        // залишаємо кешований payload, якщо був
-      }));
-    }
-  }, []);
-  React.useEffect(() => {
-    if (API_URL) refresh();
-  }, [refresh]);
-  return {
-    ...state,
-    refresh
-  };
-}
-window.DATA_STORE = {
-  useDataStore
-};
-})();
-
 ;(function(){
 // PullToRefresh — обгортка зверху над скролом.
 // Показує індикатор при тязі вниз від верху. При достатній відстані — виконує onRefresh().
@@ -1828,7 +2066,6 @@ window.PTR = {
   PullToRefresh
 };
 })();
-
 ;(function(){
 // MoreExtras — Нотатки + Файли + Підписка на автоматичні звіти
 
@@ -2638,7 +2875,6 @@ window.MORE_EXTRAS = {
   SubscriptionsSection
 };
 })();
-
 ;(function(){
 // Screens — малює екрани з агрегованих даних.
 
@@ -3552,7 +3788,8 @@ function SalesScreen({
     color: PALETTE.ink,
     h: 160,
     monthTicks: true,
-    showY: true
+    showY: true,
+    showPeaks: true
   }))), s.topProducts.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
     id: "sales-top",
     userEmail: userEmail,
@@ -3941,7 +4178,8 @@ function TrafficScreen({
     color: PALETTE.ink,
     h: 180,
     monthTicks: true,
-    showY: true
+    showY: true,
+    showPeaks: true
   })))));
 }
 function EmptyState({
@@ -4276,214 +4514,5 @@ window.SCREENS = {
   LastUpdatedFooter,
   PeriodSelector,
   AdictoLogo
-};
-})();
-
-;(function(){
-// LoginGate — простий email+пароль gate.
-// Credentials хардкодом (немає сервера). Для 2 користувачів цього достатньо.
-// Зберігає сесію в localStorage після успішного входу.
-
-const CREDENTIALS = [{
-  email: 'vasile@adicto.bike',
-  password: 'Scalpel2012!'
-}, {
-  email: 'maximiva@gmail.com',
-  password: 'Tornado80!'
-}, {
-  email: 'olegivanov578@gmail.com',
-  password: 'Tornado80!'
-}];
-const SESSION_KEY = 'adicto.session.v1';
-const SESSION_MAX_AGE_DAYS = 60;
-function checkSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    const ageDays = (Date.now() - s.loggedAt) / (1000 * 60 * 60 * 24);
-    if (ageDays > SESSION_MAX_AGE_DAYS) return null;
-    if (!CREDENTIALS.find(c => c.email === s.email)) return null; // email більше не існує
-    return s;
-  } catch {
-    return null;
-  }
-}
-function setSession(email) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({
-    email,
-    loggedAt: Date.now()
-  }));
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-function LoginScreen({
-  onLogin
-}) {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState(null);
-  const PALETTE = window.CHARTS.PALETTE;
-  const MONO = '"JetBrains Mono", ui-monospace, monospace';
-  const submit = e => {
-    e.preventDefault();
-    const em = email.trim().toLowerCase();
-    const match = CREDENTIALS.find(c => c.email.toLowerCase() === em && c.password === password);
-    if (!match) {
-      setError('Невірний email або пароль');
-      return;
-    }
-    setSession(match.email);
-    onLogin(match.email);
-  };
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      fontFamily: MONO
-    }
-  }, /*#__PURE__*/React.createElement("form", {
-    onSubmit: submit,
-    style: {
-      width: '100%',
-      maxWidth: 320,
-      background: '#fffbf0',
-      border: `1px solid ${PALETTE.line}`,
-      borderRadius: 16,
-      padding: 28
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 9.5,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: PALETTE.muted,
-      marginBottom: 6
-    }
-  }, "ADICTO.BIKE"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24,
-      letterSpacing: -0.6,
-      lineHeight: 1,
-      textTransform: 'uppercase',
-      color: PALETTE.ink,
-      fontWeight: 600,
-      marginBottom: 22
-    }
-  }, "REPORTS"), /*#__PURE__*/React.createElement(Label, null, "Email"), /*#__PURE__*/React.createElement(Field, {
-    value: email,
-    onChange: setEmail,
-    type: "email",
-    autoFocus: true,
-    placeholder: "name@adicto.bike"
-  }), /*#__PURE__*/React.createElement(Label, null, "Password"), /*#__PURE__*/React.createElement(Field, {
-    value: password,
-    onChange: setPassword,
-    type: "password",
-    placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-  }), error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: '#c47862',
-      letterSpacing: 0.4,
-      marginTop: 10,
-      padding: '8px 10px',
-      background: '#fdf0eb',
-      borderRadius: 8
-    }
-  }, "\u26A0 ", error), /*#__PURE__*/React.createElement("button", {
-    type: "submit",
-    style: {
-      width: '100%',
-      marginTop: 18,
-      padding: '12px 16px',
-      background: PALETTE.ink,
-      color: '#f1ead8',
-      border: 'none',
-      borderRadius: 10,
-      cursor: 'pointer',
-      fontFamily: MONO,
-      fontSize: 11,
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-      fontWeight: 500
-    }
-  }, "\u0423\u0432\u0456\u0439\u0442\u0438"), /*#__PURE__*/React.createElement("a", {
-    href: "mailto:vasile@adicto.bike?subject=Reports%20%E2%80%94%20%D0%B2%D1%96%D0%B4%D0%BD%D0%BE%D0%B2%D0%B8%D1%82%D0%B8%20%D0%BF%D0%B0%D1%80%D0%BE%D0%BB%D1%8C&body=%D0%9F%D1%80%D0%BE%D1%88%D1%83%20%D0%B2%D1%96%D0%B4%D0%BD%D0%BE%D0%B2%D0%B8%D1%82%D0%B8%20%D0%BF%D0%B0%D1%80%D0%BE%D0%BB%D1%8C%20%D0%B4%D0%BB%D1%8F%3A%20",
-    style: {
-      display: 'block',
-      textAlign: 'center',
-      marginTop: 14,
-      fontSize: 10,
-      letterSpacing: 0.6,
-      color: PALETTE.subtle,
-      textDecoration: 'underline',
-      textUnderlineOffset: 3
-    }
-  }, "\u0417\u0430\u0431\u0443\u0432 \u043F\u0430\u0440\u043E\u043B\u044C"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16,
-      fontSize: 9,
-      color: PALETTE.muted,
-      letterSpacing: 0.4,
-      textAlign: 'center',
-      lineHeight: 1.5
-    }
-  }, "\u0421\u0435\u0441\u0456\u044F \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044C\u0441\u044F \u043D\u0430 60 \u0434\u043D\u0456\u0432 \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457.")));
-}
-function Label({
-  children
-}) {
-  const PALETTE = window.CHARTS.PALETTE;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 9,
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-      color: PALETTE.muted,
-      marginTop: 14,
-      marginBottom: 6
-    }
-  }, children);
-}
-function Field({
-  value,
-  onChange,
-  type,
-  autoFocus,
-  placeholder
-}) {
-  const PALETTE = window.CHARTS.PALETTE;
-  const MONO = '"JetBrains Mono", ui-monospace, monospace';
-  return /*#__PURE__*/React.createElement("input", {
-    type: type,
-    value: value,
-    onChange: e => onChange(e.target.value),
-    autoFocus: autoFocus,
-    placeholder: placeholder,
-    autoComplete: type === 'password' ? 'current-password' : 'email',
-    style: {
-      width: '100%',
-      padding: '10px 12px',
-      background: '#f1ead8',
-      border: `1px solid ${PALETTE.line}`,
-      borderRadius: 8,
-      fontFamily: MONO,
-      fontSize: 13,
-      color: PALETTE.ink,
-      outline: 'none',
-      boxSizing: 'border-box'
-    }
-  });
-}
-window.AUTH = {
-  LoginScreen,
-  checkSession,
-  clearSession,
-  CREDENTIALS
 };
 })();
