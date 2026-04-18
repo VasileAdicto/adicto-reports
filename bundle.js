@@ -568,7 +568,6 @@ window.CHARTS = {
 };
 })();
 
-
 ;(function(){
 // Aggregator — перетворює raw rows з Google Sheets у метрики для UI.
 
@@ -1534,7 +1533,6 @@ window.AGGREGATOR = {
 };
 })();
 
-
 ;(function(){
 // DataStore — єдине джерело даних застосунку.
 // Стратегія:
@@ -1630,7 +1628,6 @@ window.DATA_STORE = {
   useDataStore
 };
 })();
-
 
 ;(function(){
 // PullToRefresh — обгортка зверху над скролом.
@@ -1796,7 +1793,6 @@ window.PTR = {
   PullToRefresh
 };
 })();
-
 
 ;(function(){
 // MoreExtras — Нотатки + Файли + Підписка на автоматичні звіти
@@ -2608,7 +2604,6 @@ window.MORE_EXTRAS = {
 };
 })();
 
-
 ;(function(){
 // Screens — малює екрани з агрегованих даних.
 
@@ -2942,12 +2937,6 @@ function CommentThread({
     saveComments(next);
     setAll(next);
     setDraft('');
-    // Прокидуємо пост-комент на admin email через mailto (fallback)
-    try {
-      const subj = encodeURIComponent(`[ADICTO] Коментар: ${chartId}`);
-      const body = encodeURIComponent(`${userEmail}: ${draft.trim()}`);
-      window.open(`mailto:${ADMIN_EMAIL}?subject=${subj}&body=${body}`, '_blank');
-    } catch {}
   };
   const reply = idx => {
     const t = prompt('Ваша відповідь:');
@@ -3152,7 +3141,7 @@ function CommentThread({
       textTransform: 'uppercase',
       opacity: draft.trim() ? 1 : 0.4
     }
-  }, "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u0442\u0438"))));
+  }, "\u0414\u043E\u0434\u0430\u0442\u0438"))));
 }
 
 // Обгортка для ChartCard що додає CommentThread
@@ -3373,9 +3362,6 @@ function SalesScreen({
   const [catMode, setCatMode] = React.useState('pct'); // % за замовченням
   const [payMode, setPayMode] = React.useState('pct');
   const [dowMode, setDowMode] = React.useState('pct');
-  if (!s.count) return /*#__PURE__*/React.createElement(EmptyState, {
-    msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445 \u043F\u0440\u043E\u0434\u0430\u0436\u0456\u0432 \u0443 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u043F\u0435\u0440\u0456\u043E\u0434\u0456"
-  });
   const totalGross = s.categories.reduce((a, c) => a + c.value, 0) || 1;
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3408,7 +3394,20 @@ function SalesScreen({
   }, /*#__PURE__*/React.createElement(PeriodSelector, {
     current: period === 'custom' ? 'all' : period,
     onChange: onPeriodChange
-  }))), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
+  }))), !s.count && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: '8px 0 24px',
+      padding: '40px 20px',
+      textAlign: 'center',
+      border: `1px dashed ${PALETTE.line}`,
+      borderRadius: 12,
+      background: '#fffbf0',
+      fontFamily: SC_MONO,
+      fontSize: 11,
+      color: PALETTE.subtle,
+      lineHeight: 1.6
+    }
+  }, "\u041D\u0435\u043C\u0430\u0454 \u0437\u0430\u043F\u0438\u0441\u0456\u0432 \u0437\u0430 \u043E\u0431\u0440\u0430\u043D\u0438\u0439 \u043F\u0435\u0440\u0456\u043E\u0434.", /*#__PURE__*/React.createElement("br", null), "\u0417\u043C\u0456\u043D\u0456\u0442\u044C \u0434\u0430\u0442\u0438 \u0430\u0431\u043E \u043E\u0431\u0435\u0440\u0456\u0442\u044C \u0456\u043D\u0448\u0438\u0439 \u043F\u0435\u0440\u0456\u043E\u0434.")), s.count > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -3578,7 +3577,7 @@ function SalesScreen({
     })),
     color: accent,
     showPct: payMode === 'pct'
-  }))));
+  })))));
 }
 
 // ── TRAFFIC ────────────────────────────────────────────
@@ -3598,9 +3597,6 @@ function TrafficScreen({
   const [hourMode, setHourMode] = React.useState('pct'); // 'pct' | 'count'
   const [weeklyRange, setWeeklyRange] = React.useState('4'); // '4','8','16','all'
 
-  if (!t.count) return /*#__PURE__*/React.createElement(EmptyState, {
-    msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445 \u0442\u0440\u0430\u0444\u0456\u043A\u0443 \u0443 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u043F\u0435\u0440\u0456\u043E\u0434\u0456"
-  });
   const dowOptions = [{
     id: 1,
     label: 'Пн'
@@ -3663,7 +3659,20 @@ function TrafficScreen({
   }, /*#__PURE__*/React.createElement(PeriodSelector, {
     current: period === 'custom' ? 'all' : period,
     onChange: onPeriodChange
-  }))), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
+  }))), !t.count && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: '8px 0 24px',
+      padding: '40px 20px',
+      textAlign: 'center',
+      border: `1px dashed ${PALETTE.line}`,
+      borderRadius: 12,
+      background: '#fffbf0',
+      fontFamily: SC_MONO,
+      fontSize: 11,
+      color: PALETTE.subtle,
+      lineHeight: 1.6
+    }
+  }, "\u041D\u0435\u043C\u0430\u0454 \u0437\u0430\u043F\u0438\u0441\u0456\u0432 \u0437\u0430 \u043E\u0431\u0440\u0430\u043D\u0438\u0439 \u043F\u0435\u0440\u0456\u043E\u0434.", /*#__PURE__*/React.createElement("br", null), "\u0417\u043C\u0456\u043D\u0456\u0442\u044C \u0434\u0430\u0442\u0438 \u0430\u0431\u043E \u043E\u0431\u0435\u0440\u0456\u0442\u044C \u0456\u043D\u0448\u0438\u0439 \u043F\u0435\u0440\u0456\u043E\u0434.")), t.count > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -3898,7 +3907,7 @@ function TrafficScreen({
     h: 180,
     monthTicks: true,
     showY: true
-  }))));
+  })))));
 }
 function EmptyState({
   msg
@@ -4234,7 +4243,6 @@ window.SCREENS = {
   AdictoLogo
 };
 })();
-
 
 ;(function(){
 // LoginGate — простий email+пароль gate.

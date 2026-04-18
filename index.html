@@ -468,6 +468,9 @@ function App() {
   const traffic = React.useMemo(() => trafficRows.length ? aggregateTraffic(trafficRows, aggOpts) : aggregateTraffic([]), [trafficRows, period, customRange.from, customRange.to]);
   const ratio = React.useMemo(() => computeRatio(sales, traffic), [sales, traffic]);
   const hasData = store.payload && (sales.count || traffic.count);
+  // hasAnyData — чи взагалі є завантажений payload (навіть якщо поточний фільтр дає 0 рядків).
+  // Використовуємо для того, щоб при зміні дати на період без даних екран не ховався.
+  const hasAnyData = !!store.payload;
   const swipe = useSwipe(tab, TABS, setTab);
 
   // Export PDF: відкриває чисту print-версію поточного екрану
@@ -484,6 +487,150 @@ function App() {
         </style></head><body>${screenEl.outerHTML}
         <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));<\/script>
         </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    }
+  };
+
+  // Рендер основного body
+  let body;
+  if (!session) {
+    return /*#__PURE__*/React.createElement(LoginScreen, {
+      onLogin: email => setSession({
+        email,
+        loggedAt: Date.now()
+      })
+    });
+  }
+  // Info/More завжди доступні, незалежно від даних
+  const alwaysOnTab = tab === 'info' || tab === 'more';
+  if (!hasAnyData && store.loading && !alwaysOnTab) {
+    body = /*#__PURE__*/React.createElement(Skeleton, null);
+  } else if (!hasAnyData && store.error && !alwaysOnTab) {
+    body = /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '60px 40px',
+        textAlign: 'center',
+        fontFamily: MONO,
+        maxWidth: 360,
+        margin: '0 auto'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 32,
+        marginBottom: 16
+      }
+    }, "\u26A0"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        color: PALETTE.ink,
+        marginBottom: 12,
+        fontWeight: 500
+      }
+    }, "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u0440\u0438\u043C\u0430\u0442\u0438 \u0434\u0430\u043D\u0456"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: PALETTE.subtle,
+        lineHeight: 1.6,
+        marginBottom: 20
+      }
+    }, store.error), /*#__PURE__*/React.createElement("button", {
+      onClick: store.refresh,
+      style: {
+        background: PALETTE.ink,
+        color: '#f1ead8',
+        border: 'none',
+        borderRadius: 100,
+        padding: '10px 20px',
+        fontFamily: MONO,
+        fontSize: 10,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        cursor: 'pointer'
+      }
+    }, "\u0421\u043F\u0440\u043E\u0431\u0443\u0432\u0430\u0442\u0438 \u0449\u0435 \u0440\u0430\u0437"));
+  } else if (!hasAnyData && !alwaysOnTab) {
+    body = /*#__PURE__*/React.createElement(EmptyState, {
+      msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445. \u041D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C \xAB\u041E\u043D\u043E\u0432\u0438\u0442\u0438\xBB."
+    });
+  } else {
+    body = tab === 'home' ? /*#__PURE__*/React.createElement(HomeScreen, {
+      sales: sales,
+      traffic: traffic,
+      accent: accent,
+      updated: store.payload?.updated,
+      source: store.source,
+      userEmail: session.email
+    }) : tab === 'sales' ? /*#__PURE__*/React.createElement(SalesScreen, {
+      data: sales,
+      accent: accent,
+      period: period,
+      onPeriodChange: setPeriod,
+      customRange: customRange,
+      onCustomChange: setCustomRange,
+      maxCheck: maxCheck,
+      onMaxCheckChange: setMaxCheck,
+      userEmail: session.email,
+      onExportPdf: onExportPdf
+    }) : tab === 'traffic' ? /*#__PURE__*/React.createElement(TrafficScreen, {
+      data: traffic,
+      accent: accent,
+      period: period,
+      onPeriodChange: setPeriod,
+      customRange: customRange,
+      onCustomChange: setCustomRange,
+      ratio: ratio,
+      userEmail: session.email,
+      onExportPdf: onExportPdf
+    }) : tab === 'info' ? /*#__PURE__*/React.createElement(InfoScreen, null) : /*#__PURE__*/React.createElement(MoreScreen, {
+      userEmail: session.email,
+      onLogout: handleLogout
+    });
+  }
+  const footer = tab !== 'more' && tab !== 'info' && hasAnyData ? /*#__PURE__*/React.createElement(LastUpdatedFooter, {
+    updated: store.payload?.updated,
+    savedAt: store.savedAt,
+    source: store.source,
+    loading: store.loading,
+    onRefresh: store.refresh
+  }) : null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column'
+    }
+  }, /*#__PURE__*/React.createElement(TopBar, {
+    onRefresh: store.refresh,
+    loading: store.loading,
+    source: store.source,
+    error: errorShown ? store.error : null
+  }), errorShown && store.error && hasAnyData && /*#__PURE__*/React.createElement(ErrorBanner, {
+    error: store.error,
+    onDismiss: () => setErrorShown(false)
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    },
+    onTouchStart: swipe.onTouchStart,
+    onTouchEnd: swipe.onTouchEnd
+  }, /*#__PURE__*/React.createElement(PullToRefresh, {
+    onRefresh: store.refresh,
+    loading: store.loading
+  }, /*#__PURE__*/React.createElement("div", {
+    "data-export-root": true
+  }, body), footer)), /*#__PURE__*/React.createElement(TabBar, {
+    current: tab,
+    onTab: setTab,
+    accent: accent
+  }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+})();
+</script>
+</body></html>`;
     const w = window.open('', '_blank');
     if (w) {
       w.document.write(html);
