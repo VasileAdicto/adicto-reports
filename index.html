@@ -44,199 +44,585 @@
 <script src="bundle.js"></script>
 <script>
 (function(){
-  const { useDataStore } = window.DATA_STORE;
-  const { aggregateSales, aggregateTraffic, computeRatio } = window.AGGREGATOR;
-  const { SalesScreen, TrafficScreen, HomeScreen, InfoScreen, MoreScreen, EmptyState, LastUpdatedFooter, AdictoLogo } = window.SCREENS;
-  const { PALETTE } = window.CHARTS;
-  const { PullToRefresh } = window.PTR;
-  const { LoginScreen, checkSession, clearSession } = window.AUTH;
-  const MONO = '"JetBrains Mono", ui-monospace, monospace';
-  const e = React.createElement;
+const {
+  useDataStore
+} = window.DATA_STORE;
+const {
+  aggregateSales,
+  aggregateTraffic,
+  computeRatio
+} = window.AGGREGATOR;
+const {
+  SalesScreen,
+  TrafficScreen,
+  HomeScreen,
+  InfoScreen,
+  MoreScreen,
+  EmptyState,
+  LastUpdatedFooter,
+  AdictoLogo
+} = window.SCREENS;
+const {
+  PALETTE
+} = window.CHARTS;
+const {
+  PullToRefresh
+} = window.PTR;
+const {
+  LoginScreen,
+  checkSession,
+  clearSession
+} = window.AUTH;
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
 
-  const TABS = [
-    { id: 'home', label: 'Home', glyph: '◐' },
-    { id: 'sales', label: 'Sales', glyph: '◧' },
-    { id: 'traffic', label: 'Traffic', glyph: '◉' },
-    { id: 'info', label: 'Info', glyph: 'ⓘ' },
-    { id: 'more', label: 'More', glyph: '◈' },
-  ];
-
-  function TabBar({ current, onTab, accent }) {
-    return e('div', { style: {
-      position: 'sticky', bottom: 0, left: 0, right: 0,
+// Minimal line icons (24x24) — home, euro, person, lines, gear
+const ICONS = {
+  home: c => /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M3 11 12 3l9 8"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10v10h14V10"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 20v-6h4v6"
+  })),
+  euro: c => /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M19 5.5A8 8 0 0 0 7.2 15.4 8 8 0 0 0 19 18.5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4 10h10"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4 14h9"
+  })),
+  person: c => /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "8",
+    r: "4"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"
+  })),
+  info: c => /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 11v6"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "8",
+    r: "0.8",
+    fill: c
+  })),
+  gear: c => /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M19 12c0-.5 0-1-.1-1.5l2.1-1.6-2-3.4-2.4 1a7 7 0 0 0-2.6-1.5L13.6 2h-3.2l-.4 3a7 7 0 0 0-2.6 1.5l-2.4-1-2 3.4 2.1 1.6c-.1.5-.1 1-.1 1.5s0 1 .1 1.5l-2.1 1.6 2 3.4 2.4-1a7 7 0 0 0 2.6 1.5l.4 3h3.2l.4-3a7 7 0 0 0 2.6-1.5l2.4 1 2-3.4-2.1-1.6c.1-.5.1-1 .1-1.5Z"
+  }))
+};
+const TABS = [{
+  id: 'home',
+  label: 'Home',
+  icon: 'home'
+}, {
+  id: 'sales',
+  label: 'Sales',
+  icon: 'euro'
+}, {
+  id: 'traffic',
+  label: 'Traffic',
+  icon: 'person'
+}, {
+  id: 'info',
+  label: 'Info',
+  icon: 'info'
+}, {
+  id: 'more',
+  label: 'More',
+  icon: 'gear'
+}];
+function TabBar({
+  current,
+  onTab,
+  accent
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'sticky',
+      bottom: 0,
+      left: 0,
+      right: 0,
       background: 'rgba(253, 249, 238, 0.92)',
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-      borderTop: '1px solid ' + PALETTE.line,
-      display: 'flex', padding: '5px 0 max(5px, env(safe-area-inset-bottom))',
-      zIndex: 40,
-    }}, TABS.map(t => {
-      const active = current === t.id;
-      return e('button', {
-        key: t.id, onClick: () => onTab(t.id),
-        style: { flex: 1, background: 'transparent', border: 'none', cursor: 'pointer',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-          padding: '4px 2px', color: active ? accent : PALETTE.muted },
-      }, e('div', { style: { fontSize: 16 }}, t.glyph),
-         e('div', { style: { fontFamily: MONO, fontSize: 8.5, letterSpacing: 0.6,
-           textTransform: 'uppercase', color: active ? PALETTE.ink : PALETTE.muted,
-           fontWeight: active ? 500 : 400 }}, t.label));
-    }));
-  }
-
-  function TopBar({ onRefresh, loading, source, error }) {
-    const dot = source === 'live' ? '#7aa875' : source === 'cache' ? '#c4a04e' : PALETTE.muted;
-    return e('div', { style: {
-      position: 'sticky', top: 0, zIndex: 30,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '10px 16px', gap: 10,
+      borderTop: `1px solid ${PALETTE.line}`,
+      display: 'flex',
+      padding: '6px 0 max(6px, env(safe-area-inset-bottom))',
+      zIndex: 40
+    }
+  }, TABS.map(t => {
+    const active = current === t.id;
+    const color = active ? PALETTE.ink : PALETTE.muted;
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: () => onTab(t.id),
+      style: {
+        flex: 1,
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+        padding: '4px 2px'
+      }
+    }, ICONS[t.icon](color), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: MONO,
+        fontSize: 8.5,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        color,
+        fontWeight: active ? 600 : 400
+      }
+    }, t.label));
+  }));
+}
+function TopBar({
+  onRefresh,
+  loading,
+  source,
+  error
+}) {
+  const dot = source === 'live' ? '#7aa875' : source === 'cache' ? '#c4a04e' : PALETTE.muted;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'sticky',
+      top: 0,
+      zIndex: 30,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 16px',
+      gap: 10,
       background: 'rgba(241, 234, 216, 0.92)',
-      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-      borderBottom: '1px solid ' + PALETTE.line, fontFamily: MONO,
-    }},
-      e('div', { style: { display: 'flex', alignItems: 'center', gap: 8 }},
-        e(AdictoLogo, { size: 22 }),
-        e('div', { style: { fontSize: 10, letterSpacing: 1.1, textTransform: 'uppercase', color: PALETTE.ink, fontWeight: 600 }}, 'ADICTO.BIKE')
-      ),
-      e('div', { style: { display: 'flex', alignItems: 'center', gap: 8 }},
-        e('div', { style: { width: 6, height: 6, borderRadius: 3,
-          background: error ? '#c47862' : dot,
-          animation: loading ? 'pulse 1.4s ease-in-out infinite' : 'none' }}),
-        e('button', { onClick: onRefresh, disabled: loading, style: {
-          background: 'transparent', border: '1px solid ' + PALETTE.line,
-          borderRadius: 100, padding: '5px 11px', cursor: loading ? 'default' : 'pointer',
-          fontFamily: MONO, fontSize: 9, letterSpacing: 0.8, textTransform: 'uppercase',
-          color: PALETTE.ink, opacity: loading ? 0.5 : 1,
-        }}, loading ? '↻' : '↻ Оновити')
-      )
-    );
-  }
-
-  function ErrorBanner({ error, onDismiss }) {
-    if (!error) return null;
-    return e('div', { style: {
-      margin: '10px 16px', padding: '10px 12px',
-      background: '#fdf4e8', border: '1px solid #e6c9a3', borderRadius: 10,
-      fontFamily: MONO, fontSize: 10, color: '#8a5a2a', display: 'flex',
-      justifyContent: 'space-between', alignItems: 'center',
-    }},
-      e('span', null, 'Не вдалось оновити: ' + error + '. Показую збережені дані.'),
-      e('button', { onClick: onDismiss, style: { background: 'none', border: 'none', cursor: 'pointer', color: '#8a5a2a', fontSize: 14, padding: 0 }}, '×')
-    );
-  }
-
-  function Skeleton() {
-    return e('div', { style: { padding: '20px 16px' }},
-      e('div', { style: { fontFamily: MONO, fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase', color: PALETTE.muted, marginBottom: 10 }},
-        e('span', { style: { display: 'inline-block', width: 10, height: 10, border: '2px solid ' + PALETTE.line,
-          borderTopColor: PALETTE.ink, borderRadius: '50%', marginRight: 8, verticalAlign: -1,
-          animation: 'spin 0.8s linear infinite' }}),
-        'Завантаження даних'),
-      [1,2,3].map(i => e('div', { key: i, style: {
-        height: 80, background: '#fffbf0', border: '1px solid ' + PALETTE.line,
-        borderRadius: 12, marginBottom: 10,
-        backgroundImage: 'linear-gradient(90deg, transparent, ' + PALETTE.paperLight + ', transparent)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 1.8s ease-in-out infinite',
-      }}))
-    );
-  }
-
-  function useSwipe(tab, tabs, setTab) {
-    const startX = React.useRef(null);
-    const startY = React.useRef(null);
-    const onTouchStart = (ev) => { startX.current = ev.touches[0].clientX; startY.current = ev.touches[0].clientY; };
-    const onTouchEnd = (ev) => {
-      if (startX.current == null) return;
-      const dx = ev.changedTouches[0].clientX - startX.current;
-      const dy = ev.changedTouches[0].clientY - startY.current;
-      startX.current = startY.current = null;
-      if (Math.abs(dx) < 60 || Math.abs(dy) > 40) return;
-      const idx = tabs.findIndex(t => t.id === tab);
-      if (idx < 0) return;
-      if (dx < 0 && idx < tabs.length - 1) setTab(tabs[idx + 1].id);
-      if (dx > 0 && idx > 0) setTab(tabs[idx - 1].id);
-    };
-    return { onTouchStart, onTouchEnd };
-  }
-
-  function App() {
-    const [session, setSession] = React.useState(() => checkSession());
-    if (!session) {
-      return e(LoginScreen, { onLogin: (email) => setSession({ email, loggedAt: Date.now() }) });
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      borderBottom: `1px solid ${PALETTE.line}`,
+      fontFamily: MONO
     }
-    const handleLogout = () => { clearSession(); setSession(null); };
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(AdictoLogo, {
+    size: 13
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
+      color: PALETTE.ink,
+      fontWeight: 600
+    }
+  }, "ADICTO.BIKE")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      background: error ? '#c47862' : dot,
+      animation: loading ? 'pulse 1.4s ease-in-out infinite' : 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: onRefresh,
+    disabled: loading,
+    style: {
+      background: 'transparent',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 100,
+      padding: '5px 11px',
+      cursor: loading ? 'default' : 'pointer',
+      fontFamily: MONO,
+      fontSize: 9,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: PALETTE.ink,
+      opacity: loading ? 0.5 : 1
+    }
+  }, loading ? '↻' : '↻ Оновити')));
+}
+function ErrorBanner({
+  error,
+  onDismiss
+}) {
+  if (!error) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: '10px 16px',
+      padding: '10px 12px',
+      background: '#fdf4e8',
+      border: '1px solid #e6c9a3',
+      borderRadius: 10,
+      fontFamily: MONO,
+      fontSize: 10,
+      color: '#8a5a2a',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043D\u043E\u0432\u0438\u0442\u0438: ", error, ". \u041F\u043E\u043A\u0430\u0437\u0443\u044E \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043D\u0456 \u0434\u0430\u043D\u0456."), /*#__PURE__*/React.createElement("button", {
+    onClick: onDismiss,
+    style: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: '#8a5a2a',
+      fontSize: 14,
+      padding: 0
+    }
+  }, "\xD7"));
+}
 
-    const store = useDataStore();
-    const [tab, setTab] = React.useState(() => localStorage.getItem('adicto.tab') || 'home');
-    const [period, setPeriod] = React.useState(() => localStorage.getItem('adicto.period') || 'all');
-    const [customRange, setCustomRange] = React.useState(() => {
-      try { return JSON.parse(localStorage.getItem('adicto.customRange') || 'null') || { from:'', to:'' }; }
-      catch { return { from:'', to:'' }; }
+// Skeleton — показується коли ще немає даних, але fetch у процесі
+function Skeleton() {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '20px 16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 9,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: PALETTE.muted,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'inline-block',
+      width: 10,
+      height: 10,
+      border: `2px solid ${PALETTE.line}`,
+      borderTopColor: PALETTE.ink,
+      borderRadius: '50%',
+      marginRight: 8,
+      verticalAlign: -1,
+      animation: 'spin 0.8s linear infinite'
+    }
+  }), "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F \u0434\u0430\u043D\u0438\u0445"), [1, 2, 3].map(i => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      height: 80,
+      background: '#fffbf0',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 12,
+      marginBottom: 10,
+      backgroundImage: `linear-gradient(90deg, transparent, ${PALETTE.paperLight}, transparent)`,
+      backgroundSize: '200% 100%',
+      animation: 'shimmer 1.8s ease-in-out infinite'
+    }
+  })));
+}
+
+// Swipe handler — hook
+function useSwipe(tab, tabs, setTab) {
+  const startX = React.useRef(null);
+  const startY = React.useRef(null);
+  const onTouchStart = e => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+  };
+  const onTouchEnd = e => {
+    if (startX.current == null) return;
+    const dx = e.changedTouches[0].clientX - startX.current;
+    const dy = e.changedTouches[0].clientY - startY.current;
+    startX.current = startY.current = null;
+    // Мінімум 60px горизонталь, максимум 40px вертикаль
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 40) return;
+    const idx = tabs.findIndex(t => t.id === tab);
+    if (idx < 0) return;
+    if (dx < 0 && idx < tabs.length - 1) setTab(tabs[idx + 1].id);
+    if (dx > 0 && idx > 0) setTab(tabs[idx - 1].id);
+  };
+  return {
+    onTouchStart,
+    onTouchEnd
+  };
+}
+function App() {
+  const [session, setSession] = React.useState(() => checkSession());
+  const store = useDataStore();
+  const [tab, setTab] = React.useState(() => localStorage.getItem('adicto.tab') || 'home');
+  const [period, setPeriod] = React.useState(() => localStorage.getItem('adicto.period') || 'all');
+  const [customRange, setCustomRange] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('adicto.customRange') || 'null') || {
+        from: '',
+        to: ''
+      };
+    } catch {
+      return {
+        from: '',
+        to: ''
+      };
+    }
+  });
+  const [maxCheck, setMaxCheck] = React.useState(() => {
+    const v = localStorage.getItem('adicto.maxCheck');
+    return v ? v === 'inf' ? Infinity : parseInt(v, 10) : Infinity;
+  });
+  const [errorShown, setErrorShown] = React.useState(true);
+  const accent = 'rgb(92, 158, 219)';
+  const handleLogout = () => {
+    clearSession();
+    setSession(null);
+  };
+  React.useEffect(() => {
+    localStorage.setItem('adicto.tab', tab);
+  }, [tab]);
+  React.useEffect(() => {
+    localStorage.setItem('adicto.period', period);
+  }, [period]);
+  React.useEffect(() => {
+    localStorage.setItem('adicto.customRange', JSON.stringify(customRange));
+  }, [customRange]);
+  React.useEffect(() => {
+    localStorage.setItem('adicto.maxCheck', maxCheck === Infinity ? 'inf' : String(maxCheck));
+  }, [maxCheck]);
+
+  // Опції для агрегатора
+  const aggOpts = period === 'custom' && customRange.from && customRange.to ? {
+    from: customRange.from,
+    to: customRange.to,
+    maxCheck
+  } : period !== 'all' && period !== 'custom' ? {
+    periodDays: parseInt(period, 10),
+    maxCheck
+  } : {
+    maxCheck
+  };
+
+  // Приймаємо обидва формати відповіді: { sales: [...] } (новий) або { sales: { rows: [...] } } (старий)
+  const salesRows = React.useMemo(() => {
+    const s = store.payload?.sales;
+    return Array.isArray(s) ? s : s?.rows || [];
+  }, [store.payload]);
+  const trafficRows = React.useMemo(() => {
+    const t = store.payload?.traffic;
+    return Array.isArray(t) ? t : t?.rows || [];
+  }, [store.payload]);
+  const sales = React.useMemo(() => salesRows.length ? aggregateSales(salesRows, aggOpts) : aggregateSales([]), [salesRows, period, customRange.from, customRange.to, maxCheck]);
+  const traffic = React.useMemo(() => trafficRows.length ? aggregateTraffic(trafficRows, aggOpts) : aggregateTraffic([]), [trafficRows, period, customRange.from, customRange.to]);
+  const ratio = React.useMemo(() => computeRatio(sales, traffic), [sales, traffic]);
+  const hasData = store.payload && (sales.count || traffic.count);
+  const swipe = useSwipe(tab, TABS, setTab);
+
+  // Export PDF: відкриває чисту print-версію поточного екрану
+  const onExportPdf = () => {
+    const screenEl = document.querySelector('[data-export-root]');
+    if (!screenEl) return window.print();
+    const html = `<!doctype html><html><head><meta charset="utf-8"/>
+        <title>ADICTO · ${tab}</title>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'JetBrains Mono', monospace; background: #f1ead8; color: #1a1510; margin: 32px; }
+          button { display: none !important; }
+          @media print { body { margin: 16px; } }
+        </style></head><body>${screenEl.outerHTML}
+        <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));<\/script>
+        </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    }
+  };
+
+  // Рендер основного body
+  let body;
+  if (!session) {
+    return /*#__PURE__*/React.createElement(LoginScreen, {
+      onLogin: email => setSession({
+        email,
+        loggedAt: Date.now()
+      })
     });
-    const [errorShown, setErrorShown] = React.useState(true);
-    const accent = 'rgb(92, 158, 219)';
-
-    React.useEffect(() => { localStorage.setItem('adicto.tab', tab); }, [tab]);
-    React.useEffect(() => { localStorage.setItem('adicto.period', period); }, [period]);
-    React.useEffect(() => { localStorage.setItem('adicto.customRange', JSON.stringify(customRange)); }, [customRange]);
-
-    const aggOpts = period === 'custom' && customRange.from && customRange.to
-      ? { from: customRange.from, to: customRange.to }
-      : period !== 'all' && period !== 'custom' ? { periodDays: parseInt(period, 10) } : {};
-
-    const sales = React.useMemo(() =>
-      store.payload?.sales?.rows ? aggregateSales(store.payload.sales.rows, aggOpts) : aggregateSales([])
-    , [store.payload, period, customRange.from, customRange.to]);
-
-    const traffic = React.useMemo(() =>
-      store.payload?.traffic?.rows ? aggregateTraffic(store.payload.traffic.rows, aggOpts) : aggregateTraffic([])
-    , [store.payload, period, customRange.from, customRange.to]);
-
-    const ratio = React.useMemo(() => computeRatio(sales, traffic), [sales, traffic]);
-    const hasData = store.payload && (sales.count || traffic.count);
-    const swipe = useSwipe(tab, TABS, setTab);
-
-    let body;
-    if (!hasData && store.loading) { body = e(Skeleton); }
-    else if (!hasData && store.error) {
-      body = e('div', { style: { padding: '60px 40px', textAlign: 'center', fontFamily: MONO, maxWidth: 360, margin: '0 auto' }},
-        e('div', { style: { fontSize: 32, marginBottom: 16 }}, '⚠'),
-        e('div', { style: { fontSize: 14, color: PALETTE.ink, marginBottom: 12, fontWeight: 500 }}, 'Не вдалось отримати дані'),
-        e('div', { style: { fontSize: 10, color: PALETTE.subtle, lineHeight: 1.6, marginBottom: 20 }}, store.error),
-        e('button', { onClick: store.refresh, style: {
-          background: PALETTE.ink, color: '#f1ead8', border: 'none', borderRadius: 100,
-          padding: '10px 20px', fontFamily: MONO, fontSize: 10, letterSpacing: 1,
-          textTransform: 'uppercase', cursor: 'pointer',
-        }}, 'Спробувати ще раз')
-      );
-    } else if (!hasData) {
-      body = e(EmptyState, { msg: 'Немає даних. Натисніть «Оновити».' });
-    } else {
-      body = tab === 'home' ? e(HomeScreen, { sales, traffic, accent, updated: store.payload?.updated, source: store.source })
-        : tab === 'sales' ? e(SalesScreen, { data: sales, accent, period, onPeriodChange: setPeriod, customRange, onCustomChange: setCustomRange })
-        : tab === 'traffic' ? e(TrafficScreen, { data: traffic, accent, period, onPeriodChange: setPeriod, customRange, onCustomChange: setCustomRange, ratio })
-        : tab === 'info' ? e(InfoScreen)
-        : e(MoreScreen, { userEmail: session.email, onLogout: handleLogout });
-    }
-
-    const footer = (tab !== 'more' && tab !== 'info' && hasData) ? e(LastUpdatedFooter, {
-      updated: store.payload?.updated, savedAt: store.savedAt,
-      source: store.source, loading: store.loading, onRefresh: store.refresh,
-    }) : null;
-
-    return e('div', { style: { minHeight: '100vh', display: 'flex', flexDirection: 'column' }},
-      e(TopBar, { onRefresh: store.refresh, loading: store.loading, source: store.source, error: errorShown ? store.error : null }),
-      (errorShown && store.error && hasData) ? e(ErrorBanner, { error: store.error, onDismiss: () => setErrorShown(false) }) : null,
-      e('div', { style: { flex: 1 }, onTouchStart: swipe.onTouchStart, onTouchEnd: swipe.onTouchEnd },
-        e(PullToRefresh, { onRefresh: store.refresh, loading: store.loading },
-          body, footer)
-      ),
-      e(TabBar, { current: tab, onTab: setTab, accent })
-    );
   }
-
-  ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+  if (!hasData && store.loading) {
+    body = /*#__PURE__*/React.createElement(Skeleton, null);
+  } else if (!hasData && store.error) {
+    body = /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '60px 40px',
+        textAlign: 'center',
+        fontFamily: MONO,
+        maxWidth: 360,
+        margin: '0 auto'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 32,
+        marginBottom: 16
+      }
+    }, "\u26A0"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        color: PALETTE.ink,
+        marginBottom: 12,
+        fontWeight: 500
+      }
+    }, "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u0440\u0438\u043C\u0430\u0442\u0438 \u0434\u0430\u043D\u0456"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: PALETTE.subtle,
+        lineHeight: 1.6,
+        marginBottom: 20
+      }
+    }, store.error), /*#__PURE__*/React.createElement("button", {
+      onClick: store.refresh,
+      style: {
+        background: PALETTE.ink,
+        color: '#f1ead8',
+        border: 'none',
+        borderRadius: 100,
+        padding: '10px 20px',
+        fontFamily: MONO,
+        fontSize: 10,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        cursor: 'pointer'
+      }
+    }, "\u0421\u043F\u0440\u043E\u0431\u0443\u0432\u0430\u0442\u0438 \u0449\u0435 \u0440\u0430\u0437"));
+  } else if (!hasData) {
+    body = /*#__PURE__*/React.createElement(EmptyState, {
+      msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445. \u041D\u0430\u0442\u0438\u0441\u043D\u0456\u0442\u044C \xAB\u041E\u043D\u043E\u0432\u0438\u0442\u0438\xBB."
+    });
+  } else {
+    body = tab === 'home' ? /*#__PURE__*/React.createElement(HomeScreen, {
+      sales: sales,
+      traffic: traffic,
+      accent: accent,
+      updated: store.payload?.updated,
+      source: store.source,
+      userEmail: session.email
+    }) : tab === 'sales' ? /*#__PURE__*/React.createElement(SalesScreen, {
+      data: sales,
+      accent: accent,
+      period: period,
+      onPeriodChange: setPeriod,
+      customRange: customRange,
+      onCustomChange: setCustomRange,
+      maxCheck: maxCheck,
+      onMaxCheckChange: setMaxCheck,
+      userEmail: session.email,
+      onExportPdf: onExportPdf
+    }) : tab === 'traffic' ? /*#__PURE__*/React.createElement(TrafficScreen, {
+      data: traffic,
+      accent: accent,
+      period: period,
+      onPeriodChange: setPeriod,
+      customRange: customRange,
+      onCustomChange: setCustomRange,
+      ratio: ratio,
+      userEmail: session.email,
+      onExportPdf: onExportPdf
+    }) : tab === 'info' ? /*#__PURE__*/React.createElement(InfoScreen, null) : /*#__PURE__*/React.createElement(MoreScreen, {
+      userEmail: session.email,
+      onLogout: handleLogout
+    });
+  }
+  const footer = tab !== 'more' && tab !== 'info' && hasData ? /*#__PURE__*/React.createElement(LastUpdatedFooter, {
+    updated: store.payload?.updated,
+    savedAt: store.savedAt,
+    source: store.source,
+    loading: store.loading,
+    onRefresh: store.refresh
+  }) : null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column'
+    }
+  }, /*#__PURE__*/React.createElement(TopBar, {
+    onRefresh: store.refresh,
+    loading: store.loading,
+    source: store.source,
+    error: errorShown ? store.error : null
+  }), errorShown && store.error && hasData && /*#__PURE__*/React.createElement(ErrorBanner, {
+    error: store.error,
+    onDismiss: () => setErrorShown(false)
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    },
+    onTouchStart: swipe.onTouchStart,
+    onTouchEnd: swipe.onTouchEnd
+  }, /*#__PURE__*/React.createElement(PullToRefresh, {
+    onRefresh: store.refresh,
+    loading: store.loading
+  }, /*#__PURE__*/React.createElement("div", {
+    "data-export-root": true
+  }, body), footer)), /*#__PURE__*/React.createElement(TabBar, {
+    current: tab,
+    onTab: setTab,
+    accent: accent
+  }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
 })();
 </script>
 </body>

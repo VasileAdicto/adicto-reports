@@ -131,7 +131,8 @@ function BigStat({
   label,
   value,
   accent,
-  hint
+  hint,
+  extra
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -168,7 +169,11 @@ function BigStat({
       marginTop: 4,
       letterSpacing: 0.4
     }
-  }, hint));
+  }, hint), extra && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, extra));
 }
 
 // 33830 → "33 830"
@@ -255,24 +260,56 @@ function BarsV({
   labelKey = 'month',
   h = 160,
   showVals = true,
+  showY = false,
+  isPct = false,
   formatter
 }) {
-  const fmtVal = formatter || fmt;
+  const fmtVal = formatter || (isPct ? v => v.toFixed(1).replace(/\.0$/, '') + '%' : fmt);
   const totals = data.map(d => keys.reduce((s, k) => s + d[k], 0));
   const max = Math.max(...totals, 1) * 1.15;
-  const pad = 30;
-  const plotH = h - pad - 14;
-  const bw = 260 / Math.max(data.length, 1);
-  const gap = bw * 0.18;
+  const topPad = 14;
+  const botPad = 22;
+  const leftPad = showY ? 34 : 20;
+  const rightPad = 10;
+  const plotW = 300 - leftPad - rightPad;
+  const plotH = h - topPad - botPad;
+  const bw = plotW / Math.max(data.length, 1);
+  const gap = Math.max(2, bw * 0.18);
+
+  // Y-шкала (3 рівні)
+  const yTicks = showY ? [0, 0.5, 1].map(t => ({
+    y: topPad + plotH - t * plotH,
+    v: t * max
+  })) : [];
+
+  // Підписи X: якщо багато — виводимо кожен 2й/3й
+  const xSkip = data.length > 12 ? Math.ceil(data.length / 8) : 1;
   return /*#__PURE__*/React.createElement("svg", {
     width: "100%",
     height: h,
     viewBox: `0 0 300 ${h}`,
     preserveAspectRatio: "none"
-  }, data.map((d, i) => {
-    const x = 20 + i * bw + gap / 2;
+  }, showY && yTicks.map((t, i) => /*#__PURE__*/React.createElement("g", {
+    key: i
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: leftPad,
+    x2: 300 - rightPad,
+    y1: t.y,
+    y2: t.y,
+    stroke: PALETTE.line,
+    strokeWidth: "0.5",
+    strokeDasharray: "2 2"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: leftPad - 4,
+    y: t.y + 3,
+    fontSize: "8",
+    fontFamily: CH_MONO,
+    fill: PALETTE.muted,
+    textAnchor: "end"
+  }, isPct ? fmtVal(t.v) : t.v > 1000 ? Math.round(t.v / 1000) + 'k' : fmt(t.v)))), data.map((d, i) => {
+    const x = leftPad + i * bw + gap / 2;
     const w = bw - gap;
-    let yAcc = plotH;
+    let yAcc = topPad + plotH;
     return /*#__PURE__*/React.createElement("g", {
       key: i
     }, keys.map((k, ki) => {
@@ -286,14 +323,14 @@ function BarsV({
         height: seg,
         fill: colors[ki]
       });
-    }), showVals && totals[i] > 0 && /*#__PURE__*/React.createElement("text", {
+    }), showVals && totals[i] > 0 && !showY && /*#__PURE__*/React.createElement("text", {
       x: x + w / 2,
-      y: plotH - totals[i] / max * plotH - 4,
+      y: topPad + plotH - totals[i] / max * plotH - 4,
       fontSize: "8.5",
       fontFamily: CH_MONO,
       fill: PALETTE.ink,
       textAnchor: "middle"
-    }, fmtVal(totals[i])), /*#__PURE__*/React.createElement("text", {
+    }, fmtVal(totals[i])), (i % xSkip === 0 || i === data.length - 1) && /*#__PURE__*/React.createElement("text", {
       x: x + w / 2,
       y: h - 4,
       fontSize: "9",
@@ -310,33 +347,47 @@ function AreaChart({
   data,
   h = 140,
   color = PALETTE.ink,
-  monthTicks = true
+  monthTicks = true,
+  showY = false
 }) {
   if (!data || !data.length) return null;
   const isObj = typeof data[0] === 'object';
   const values = isObj ? data.map(d => d.v) : data;
   const starts = isObj ? data.map(d => d.start) : null;
   const max = Math.max(...values, 1) * 1.1;
-  const pad = 22;
-  const plotH = h - pad;
-  const pts = values.map((v, i) => [20 + (values.length === 1 ? 130 : i / (values.length - 1) * 260), plotH - v / max * (plotH - 6) + 2]);
+  const topPad = 8;
+  const botPad = 22;
+  const leftPad = showY ? 32 : 20;
+  const rightPad = 10;
+  const plotW = 300 - leftPad - rightPad;
+  const plotH = h - topPad - botPad;
+  const pts = values.map((v, i) => [leftPad + (values.length === 1 ? plotW / 2 : i / (values.length - 1) * plotW), topPad + plotH - v / max * (plotH - 4)]);
   const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
-  const area = path + ` L${pts[pts.length - 1][0]},${plotH} L${pts[0][0]},${plotH} Z`;
+  const baseY = topPad + plotH;
+  const area = path + ` L${pts[pts.length - 1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
+  const yTicks = showY ? [0, 0.5, 1].map(t => ({
+    y: topPad + plotH - t * (plotH - 4),
+    v: t * max
+  })) : [];
 
-  // Мітки місяців — для кожної точки, де змінився місяць vs попередньої
+  // Мітки місяців — не частіше кожних 30px
   const MONTH_UA = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'];
   const monthLabels = [];
   if (monthTicks && starts) {
     let prevMonth = -1;
+    let lastX = -40;
     starts.forEach((s, i) => {
       if (!(s instanceof Date)) return;
       const m = s.getMonth();
-      if (m !== prevMonth) {
+      if (m !== prevMonth && pts[i][0] - lastX >= 30) {
         monthLabels.push({
           i,
           label: MONTH_UA[m],
           x: pts[i][0]
         });
+        lastX = pts[i][0];
+        prevMonth = m;
+      } else if (m !== prevMonth) {
         prevMonth = m;
       }
     });
@@ -346,12 +397,29 @@ function AreaChart({
     height: h,
     viewBox: `0 0 300 ${h}`,
     preserveAspectRatio: "none"
-  }, [0.25, 0.5, 0.75].map(t => /*#__PURE__*/React.createElement("line", {
+  }, showY ? yTicks.map((t, i) => /*#__PURE__*/React.createElement("g", {
+    key: i
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: leftPad,
+    x2: 300 - rightPad,
+    y1: t.y,
+    y2: t.y,
+    stroke: PALETTE.line,
+    strokeWidth: "0.5",
+    strokeDasharray: "2 2"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: leftPad - 4,
+    y: t.y + 3,
+    fontSize: "8",
+    fontFamily: CH_MONO,
+    fill: PALETTE.muted,
+    textAnchor: "end"
+  }, t.v > 1000 ? Math.round(t.v / 1000) + 'k' : fmt(t.v)))) : [0.25, 0.5, 0.75].map(t => /*#__PURE__*/React.createElement("line", {
     key: t,
-    x1: "20",
-    x2: "280",
-    y1: plotH - t * (plotH - 6) + 2,
-    y2: plotH - t * (plotH - 6) + 2,
+    x1: leftPad,
+    x2: 300 - rightPad,
+    y1: topPad + plotH - t * (plotH - 4),
+    y2: topPad + plotH - t * (plotH - 4),
     stroke: PALETTE.line,
     strokeWidth: "0.5",
     strokeDasharray: "2 2"
@@ -375,8 +443,8 @@ function AreaChart({
   }, /*#__PURE__*/React.createElement("line", {
     x1: m.x,
     x2: m.x,
-    y1: plotH,
-    y2: plotH + 4,
+    y1: baseY,
+    y2: baseY + 3,
     stroke: PALETTE.muted,
     strokeWidth: "0.6"
   }), /*#__PURE__*/React.createElement("text", {
@@ -500,6 +568,7 @@ window.CHARTS = {
 };
 })();
 
+
 ;(function(){
 // Aggregator — перетворює raw rows з Google Sheets у метрики для UI.
 
@@ -528,12 +597,36 @@ function parseTrafficDate(v) {
   if (!v) return null;
   if (v instanceof Date) return v;
   const s = String(v).trim();
+  // ISO з часом — Sheets зберігає як UTC-середина-ночі-для-локальної-дати (Мадрид).
+  // Просто new Date(s) дає локальну дату правильно.
+  if (/T\d{2}:\d{2}/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
   const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
   const m2 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m2) return new Date(+m2[1], +m2[2] - 1, +m2[3]);
   const d = new Date(s);
   return isNaN(d) ? null : d;
+}
+
+// Парсить годину з різних форматів:
+//   "17:35:56"   → 17
+//   "17:35"      → 17
+//   "1899-12-30T17:35:56.000Z" (Sheets serial serialized as ISO з UTC) → 17 (UTC)
+//   Date object  → getUTCHours() або getHours() залежно від джерела
+function parseHour(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  // ISO-форма — беремо UTC-години (Sheets serial-часи серіалізуються в UTC)
+  const iso = s.match(/T(\d{2}):(\d{2})/);
+  if (iso) return parseInt(iso[1], 10);
+  // HH:MM або HH:MM:SS
+  const hm = s.match(/^(\d{1,2}):(\d{2})/);
+  if (hm) return parseInt(hm[1], 10);
+  const n = parseInt(s, 10);
+  return isNaN(n) || n < 0 || n > 23 ? null : n;
 }
 
 // Українські назви днів / місяців
@@ -682,8 +775,21 @@ function dateKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+// Глобальні мінімальні дати — до цих дат дані вважаємо тестовими.
+// Продажі: дані є з 1 січня 2026. Traffic: сенсор встановлений 10 квітня 2026.
+const SALES_START = new Date(2026, 0, 1); // 01.01.2026
+const TRAFFIC_START = new Date(2026, 3, 10); // 10.04.2026
+SALES_START.setHours(0, 0, 0, 0);
+TRAFFIC_START.setHours(0, 0, 0, 0);
+// Legacy alias (на випадок якщо десь використовується)
+const DATA_START = SALES_START;
+
 // Фільтрує records по опціях: periodDays (last N days based on latest) АБО from/to
-function applyPeriod(allRecords, opts) {
+// minDate — нижня межа (SALES_START або TRAFFIC_START).
+function applyPeriod(allRecords, opts, minDate) {
+  minDate = minDate || SALES_START;
+  if (!allRecords.length) return allRecords;
+  allRecords = allRecords.filter(r => r.date >= minDate);
   if (!allRecords.length) return allRecords;
   const latest = allRecords.reduce((a, r) => r.date > a ? r.date : a, new Date(0));
   if (opts.from && opts.to) {
@@ -703,8 +809,41 @@ function applyPeriod(allRecords, opts) {
 }
 function aggregateSales(rows, opts = {}) {
   if (!rows?.length) return emptySales();
-  const allRecords = rows.map(normalizeSaleRow).filter(r => r.date);
-  const records = applyPeriod(allRecords, opts);
+  const allRecords = rows.map(normalizeSaleRow).filter(r => r.date && r.date >= SALES_START);
+  // maxCheck застосовується ТІЛЬКИ до avgCheck (нижче). Totals/monthly/categories — повні.
+  const maxCheck = opts.maxCheck || Infinity;
+  const records = applyPeriod(allRecords, opts, SALES_START);
+
+  // Поточний тиждень (пн-сб, від latest — неділю виключаємо, не працюємо)
+  const latest = allRecords.length ? allRecords.reduce((a, r) => r.date > a ? r.date : a, new Date(0)) : new Date();
+  const wkStart = weekStart(latest);
+  const weekRecords = allRecords.filter(r => r.date >= wkStart && r.date <= latest && r.date.getDay() !== 0);
+  const weekDocsSum = new Map();
+  weekRecords.forEach(r => {
+    if (!r.doc) return;
+    weekDocsSum.set(r.doc, (weekDocsSum.get(r.doc) || 0) + r.gross);
+  });
+  const weekDocsCount = weekDocsSum.size;
+  const weekGrossTotal = [...weekDocsSum.values()].reduce((a, b) => a + b, 0);
+  const currentWeek = {
+    gross: weekRecords.reduce((a, r) => a + r.gross, 0),
+    profit: weekRecords.reduce((a, r) => a + r.profit, 0),
+    count: weekRecords.length,
+    docs: weekDocsCount,
+    avgCheck: weekDocsCount > 0 ? weekGrossTotal / weekDocsCount : 0,
+    range: weekRecords.length ? {
+      from: wkStart,
+      to: latest
+    } : null
+  };
+  // Майстерня (категорія "Ремонт") поточний тиждень
+  const repairWeek = weekRecords.filter(r => categoryName(r.cat) === 'Ремонт');
+  const workshopWeek = {
+    gross: repairWeek.reduce((a, r) => a + r.gross, 0),
+    profit: repairWeek.reduce((a, r) => a + r.profit, 0),
+    count: repairWeek.length,
+    docs: new Set(repairWeek.map(r => r.doc).filter(Boolean)).size
+  };
   const totals = records.reduce((a, r) => {
     a.gross += r.gross;
     a.sale += r.sale;
@@ -749,15 +888,31 @@ function aggregateSales(rows, opts = {}) {
     pct: value / catTotal * 100
   })).sort((a, b) => b.value - a.value);
 
-  // По днях тижня (UA)
-  const dayMap = new Map();
+  // По днях тижня (UA) — ВІДСІЮЄМО чеки >1000€ (рідкі великі опт-покупки) і неділю
+  // Агрегуємо по документах (чеках), не по позиціях; далі — по днях тижня.
+  const docGrossByDate = new Map();
   records.forEach(r => {
-    const key = WEEK_UA[r.date.getDay()];
-    dayMap.set(key, (dayMap.get(key) || 0) + r.gross);
+    if (!r.doc) return;
+    const k = r.doc + '|' + dateKey(r.date);
+    const cur = docGrossByDate.get(k) || {
+      date: r.date,
+      gross: 0
+    };
+    cur.gross += r.gross;
+    docGrossByDate.set(k, cur);
   });
-  const weekByDay = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'].map(d => ({
+  const dayMap = new Map();
+  docGrossByDate.forEach(doc => {
+    if (doc.gross > 1000) return; // відсів великі чеки
+    const key = WEEK_UA[doc.date.getDay()];
+    if (key === 'нд') return; // неділю геть
+    dayMap.set(key, (dayMap.get(key) || 0) + doc.gross);
+  });
+  const weekByDayTotal = [...dayMap.values()].reduce((a, b) => a + b, 0) || 1;
+  const weekByDay = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'].map(d => ({
     day: d,
-    v: Math.round(dayMap.get(d) || 0)
+    v: Math.round(dayMap.get(d) || 0),
+    pct: Math.round((dayMap.get(d) || 0) / weekByDayTotal * 1000) / 10
   })).filter(x => x.v > 0);
 
   // Timeline по тижнях з міткою місяця (перший день тижня)
@@ -810,7 +965,7 @@ function aggregateSales(rows, opts = {}) {
   });
   const topClients = [...clientMap.values()].sort((a, b) => b.gross - a.gross).slice(0, 20);
 
-  // Способи оплати (з перекладом)
+  // Способи оплати (з перекладом) — + %
   const PAY_NAMES = {
     TRA: 'Переказ',
     TAR: 'Термінал',
@@ -823,10 +978,12 @@ function aggregateSales(rows, opts = {}) {
     const k = (r.pay || 'OTRO').toUpperCase();
     payMap.set(k, (payMap.get(k) || 0) + r.gross);
   });
+  const payTotal = [...payMap.values()].reduce((a, b) => a + b, 0) || 1;
   const payments = [...payMap.entries()].map(([code, v]) => ({
     code,
     name: PAY_NAMES[code] || code,
-    v: Math.round(v)
+    v: Math.round(v),
+    pct: Math.round(v / payTotal * 1000) / 10
   })).sort((a, b) => b.v - a.v);
 
   // Unique docs per date (для Ratio)
@@ -842,6 +999,17 @@ function aggregateSales(rows, opts = {}) {
     receiptsByDate[k] = set.size;
   });
   const totalReceipts = Object.values(receiptsByDate).reduce((a, b) => a + b, 0);
+
+  // Середній чек — на унікальний документ, з фільтром maxCheck
+  const docGrossTotals = new Map();
+  records.forEach(r => {
+    if (!r.doc) return;
+    docGrossTotals.set(r.doc, (docGrossTotals.get(r.doc) || 0) + r.gross);
+  });
+  // Виключаємо документи з сумою >= maxCheck (Vasile: "без продажів від 5000" / "від 2000")
+  const filteredDocs = [...docGrossTotals.values()].filter(v => v < maxCheck);
+  const avgCheck = filteredDocs.length ? filteredDocs.reduce((a, b) => a + b, 0) / filteredDocs.length : 0;
+  const avgCheckDocs = filteredDocs.length;
   const dates = records.map(r => r.date);
   const range = dates.length ? {
     from: new Date(Math.min(...dates)),
@@ -858,8 +1026,13 @@ function aggregateSales(rows, opts = {}) {
     payments,
     receiptsByDate,
     totalReceipts,
+    avgCheck,
+    avgCheckDocs,
+    maxCheck,
     range,
-    count: records.length
+    count: records.length,
+    currentWeek,
+    workshopWeek
   };
 }
 function emptySales() {
@@ -880,8 +1053,25 @@ function emptySales() {
     payments: [],
     receiptsByDate: {},
     totalReceipts: 0,
+    avgCheck: 0,
+    avgCheckDocs: 0,
+    maxCheck: Infinity,
     range: null,
-    count: 0
+    count: 0,
+    currentWeek: {
+      gross: 0,
+      profit: 0,
+      count: 0,
+      docs: 0,
+      avgCheck: 0,
+      range: null
+    },
+    workshopWeek: {
+      gross: 0,
+      profit: 0,
+      count: 0,
+      docs: 0
+    }
   };
 }
 function weekStart(d) {
@@ -904,30 +1094,34 @@ function isoWeekKey(d) {
 // Header: Date, Time, Week_Day, Session_ID, Event, Gender, Age, Age_Group, Duration_min
 function aggregateTraffic(rows, opts = {}) {
   if (!rows?.length) return emptyTraffic();
-  const allRecords = rows.map(r => ({
-    date: parseTrafficDate(r['Date'] || r.date),
-    time: String(r['Time'] || '').trim(),
-    sessionId: String(r['Session_ID'] || r['SessionID'] || '').trim(),
-    event: String(r['Event'] || '').trim().toLowerCase(),
-    gender: String(r['Gender'] || r['Стать'] || '-').trim(),
-    age: num(r['Age']),
-    ageGroup: String(r['Age_Group'] || r['AgeGroup'] || '').trim(),
-    duration: num(r['Duration_min'] || r['Duration'] || r['Хвилини'])
-  })).filter(r => r.date);
-  const records = applyPeriod(allRecords, opts);
 
-  // Унікальні сесії по session root (без префіксу Enter_/Exit_)
-  function sessionRoot(id) {
-    if (!id) return '';
-    return id.replace(/^(enter|exit)_/i, '').trim();
-  }
+  // Visitas_Detalle: Date, Time, Week_Day, Session_ID, Event (enter|exit), Gender, Age, Age_Group, Duration_min
+  // Відвідування = (count(enter) + count(exit)) / 2 — за вимогою Vasile.
+  // Щоб агрегації просто сумувати — кожен рядок важить 0.5 (енкодуємо в r.enter).
+  const allRecords = rows.map(r => {
+    const ev = String(r['Event'] || '').trim().toLowerCase();
+    return {
+      date: parseTrafficDate(r['Date'] || r.date),
+      time: String(r['Time'] || '').trim(),
+      event: ev,
+      // 'enter' | 'exit'
+      enter: ev === 'enter' || ev === 'exit' ? 0.5 : 0,
+      // вага для (enter+exit)/2
+      exit: ev === 'exit' ? 1 : 0,
+      gender: String(r['Gender'] || r['Стать'] || '-').trim(),
+      duration: num(r['Duration_min'] || r['Хвилини'] || r['Duration']),
+      ageGroup: String(r['Age_Group'] || r['AgeGroup'] || r['Вік'] || '').trim()
+    };
+  }).filter(r => r.date && r.date >= TRAFFIC_START && (r.event === 'enter' || r.event === 'exit'));
+  const records = applyPeriod(allRecords, opts, TRAFFIC_START);
 
-  // Беремо ВСІ enter events як унікальних клієнтів (один enter = один візит)
-  const enterRecords = records.filter(r => r.event === 'enter');
-  const exitRecords = records.filter(r => r.event === 'exit');
-  const totalVisitors = enterRecords.length;
+  // Відвідування = (count(enter) + count(exit)) / 2. Кожен рядок = вага 0.5 в r.enter.
+  const enterRecords = records; // всі події для per-time агрегації
+  const exitRecords = records.filter(r => r.event === 'exit'); // для duration
+  const enterOnly = records.filter(r => r.event === 'enter'); // для hourly/weekday — тільки час входу
+  const totalVisitors = records.reduce((a, r) => a + r.enter, 0);
 
-  // Gender — беремо з exit records (там є дані), або з enter якщо є
+  // Gender/Age — беремо з КОЖНОГО рядка де є (enter або exit), вага = 0.5
   const genderMap = {
     Ч: 0,
     Ж: 0,
@@ -935,32 +1129,17 @@ function aggregateTraffic(rows, opts = {}) {
   };
   const ageGroupMap = new Map();
   const durations = [];
-
-  // Зв'яжемо exit із enter через sessionRoot для збагачення
-  const sessionData = new Map();
   records.forEach(r => {
-    const root = sessionRoot(r.sessionId);
-    if (!root) return;
-    if (!sessionData.has(root)) sessionData.set(root, {});
-    const s = sessionData.get(root);
-    if (r.event === 'enter') s.enterAt = r;
-    if (r.event === 'exit') {
-      s.exitAt = r;
-      s.gender = r.gender && r.gender !== '-' ? r.gender : s.gender;
-      s.age = r.age || s.age;
-      s.ageGroup = r.ageGroup || s.ageGroup;
-      s.duration = r.duration || s.duration;
+    const g = r.gender || '-';
+    const k = g === 'Ч' || g === 'Ж' ? g : '-';
+    genderMap[k] += 0.5;
+    if (r.ageGroup) {
+      ageGroupMap.set(r.ageGroup, (ageGroupMap.get(r.ageGroup) || 0) + 0.5);
     }
   });
-  sessionData.forEach(s => {
-    if (!s.enterAt) return; // рахуємо лише візити з enter
-    const g = s.gender || '-';
-    const k = g === 'Ч' || g === 'Ж' ? g : '-';
-    genderMap[k] += 1;
-    if (s.ageGroup) {
-      ageGroupMap.set(s.ageGroup, (ageGroupMap.get(s.ageGroup) || 0) + 1);
-    }
-    if (s.duration > 0) durations.push(s.duration);
+  // Duration — з exit (там фіксується час сесії)
+  exitRecords.forEach(r => {
+    if (r.duration > 0) durations.push(r.duration);
   });
 
   // Age groups sorted
@@ -1010,7 +1189,7 @@ function aggregateTraffic(rows, opts = {}) {
     if (b) b.v += 1;
   });
 
-  // Місяці
+  // Місяці — сума enter
   const monthMap = new Map();
   enterRecords.forEach(r => {
     const key = r.date.getFullYear() + '-' + r.date.getMonth();
@@ -1022,56 +1201,236 @@ function aggregateTraffic(rows, opts = {}) {
         v: 0
       });
     }
-    monthMap.get(key).v += 1;
+    monthMap.get(key).v += r.enter;
   });
   const monthly = [...monthMap.values()].sort((a, b) => a.year - b.year || a.mIdx - b.mIdx);
 
-  // По днях тижня (UA)
+  // По днях тижня (UA) — кількість Enter; неділю виключено (не працюємо)
   const dayMap = new Map();
-  enterRecords.forEach(r => {
+  enterOnly.forEach(r => {
+    if (r.date.getDay() === 0) return;
     const key = WEEK_UA[r.date.getDay()];
     dayMap.set(key, (dayMap.get(key) || 0) + 1);
   });
-  const weekday = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'].map(d => ({
+  const weekday = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'].map(d => ({
     day: d,
     v: dayMap.get(d) || 0
   }));
 
-  // По годинах
-  const hourMap = new Map();
-  enterRecords.forEach(r => {
-    const h = parseInt(String(r.time).split(':')[0], 10);
-    if (isNaN(h)) return;
-    hourMap.set(h, (hourMap.get(h) || 0) + 1);
+  // По годинах — СЕРЕДНЄ по дню тижня (кількість Enter / кількість унікальних дат)
+  const hourAllByDow = {};
+  for (let d = 0; d < 7; d++) hourAllByDow[d] = {};
+  enterOnly.forEach(r => {
+    const h = parseHour(r.time);
+    if (h == null) return;
+    const dow = r.date.getDay();
+    const dk = dateKey(r.date);
+    if (!hourAllByDow[dow][h]) hourAllByDow[dow][h] = {
+      total: 0,
+      dates: new Set()
+    };
+    hourAllByDow[dow][h].total += 1;
+    hourAllByDow[dow][h].dates.add(dk);
   });
-  const hourly = Array.from({
-    length: 24
-  }, (_, h) => ({
-    h,
-    v: hourMap.get(h) || 0
+
+  // Побудова hourlyByDay: {dow: [{h, avg, total}]}
+  function hoursFor(dow, hFrom, hTo) {
+    const byHour = hourAllByDow[dow] || {};
+    const allDates = new Set();
+    Object.values(byHour).forEach(x => x.dates.forEach(d => allDates.add(d)));
+    const numDates = allDates.size || 1;
+    const hours = [];
+    for (let h = hFrom; h <= hTo; h++) {
+      const b = byHour[h] || {
+        total: 0
+      };
+      hours.push({
+        h,
+        avg: b.total / numDates,
+        total: b.total
+      });
+    }
+    // В відсотках від загальної середньої
+    const sum = hours.reduce((a, x) => a + x.avg, 0) || 1;
+    return hours.map(x => ({
+      ...x,
+      pct: Math.round(x.avg / sum * 1000) / 10
+    }));
+  }
+
+  // Для кожного дня тижня (пн-сб) + Усе (пн-пт середнє)
+  const hourlyByDay = {};
+  // пн-пт (dow 1..5) = 10-20
+  [1, 2, 3, 4, 5].forEach(dow => {
+    hourlyByDay[dow] = hoursFor(dow, 10, 20);
+  });
+  // сб (dow 6) = 8-14
+  hourlyByDay[6] = hoursFor(6, 8, 14);
+  // "Усе" — середнє по пн-пт (без сб і нд)
+  const allWeekdayHours = [];
+  for (let h = 10; h <= 20; h++) {
+    let sumAvg = 0,
+      sumPct = 0;
+    [1, 2, 3, 4, 5].forEach(dow => {
+      const row = hourlyByDay[dow].find(x => x.h === h);
+      if (row) {
+        sumAvg += row.avg;
+      }
+    });
+    allWeekdayHours.push({
+      h,
+      avg: sumAvg / 5
+    });
+  }
+  const totalAllAvg = allWeekdayHours.reduce((a, x) => a + x.avg, 0) || 1;
+  hourlyByDay['all'] = allWeekdayHours.map(x => ({
+    ...x,
+    pct: Math.round(x.avg / totalAllAvg * 1000) / 10
   }));
 
-  // Найактивніша година
-  let peakHour = null,
-    peakV = 0;
-  hourly.forEach(x => {
-    if (x.v > peakV) {
-      peakV = x.v;
-      peakHour = x.h;
-    }
-  });
+  // Поточний тиждень (для Home)
+  const latest = allRecords.length ? allRecords.reduce((a, r) => r.date > a ? r.date : a, new Date(0)) : new Date();
+  const wkStart = weekStart(latest);
+  const currentWeekEnters = allRecords.filter(r => r.enter > 0 && r.date >= wkStart && r.date <= latest);
+  const currentWeek = {
+    visitors: currentWeekEnters.reduce((a, r) => a + r.enter, 0),
+    range: currentWeekEnters.length ? {
+      from: wkStart,
+      to: latest
+    } : null
+  };
 
-  // Визитів по датах (для Ratio)
-  const visitsByDate = {};
-  enterRecords.forEach(r => {
+  // Тенденція: останні 7 днів vs попередні 7 днів
+  const last7End = new Date(latest);
+  last7End.setHours(23, 59, 59, 999);
+  const last7Start = new Date(latest);
+  last7Start.setHours(0, 0, 0, 0);
+  last7Start.setDate(last7Start.getDate() - 6);
+  const prev7End = new Date(last7Start);
+  prev7End.setDate(prev7End.getDate() - 1);
+  prev7End.setHours(23, 59, 59, 999);
+  const prev7Start = new Date(prev7End);
+  prev7Start.setDate(prev7Start.getDate() - 6);
+  prev7Start.setHours(0, 0, 0, 0);
+  const allEnters = allRecords.filter(r => r.enter > 0);
+  const last7Count = allEnters.filter(r => r.date >= last7Start && r.date <= last7End).reduce((a, r) => a + r.enter, 0);
+  const prev7Count = allEnters.filter(r => r.date >= prev7Start && r.date <= prev7End).reduce((a, r) => a + r.enter, 0);
+  const last7Trend = {
+    current: last7Count,
+    previous: prev7Count,
+    deltaPct: prev7Count > 0 ? (last7Count - prev7Count) / prev7Count * 100 : null
+  };
+
+  // Last 7 днів по днях
+  const last7Map = new Map();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(last7End);
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    last7Map.set(dateKey(d), {
+      date: new Date(d),
+      v: 0
+    });
+  }
+  allEnters.forEach(r => {
+    if (r.date < last7Start || r.date > last7End) return;
     const k = dateKey(r.date);
-    visitsByDate[k] = (visitsByDate[k] || 0) + 1;
+    if (last7Map.has(k)) last7Map.get(k).v += r.enter;
+  });
+  const last7Days = [...last7Map.values()].map(x => ({
+    day: WEEK_UA[x.date.getDay()],
+    dateStr: String(x.date.getDate()).padStart(2, '0') + '.' + String(x.date.getMonth() + 1).padStart(2, '0'),
+    v: x.v
+  }));
+
+  // По тижнях (для тижневого графіка — 4/8/16/всі)
+  const weekMap = new Map();
+  allEnters.forEach(r => {
+    const key = isoWeekKey(r.date);
+    if (!weekMap.has(key)) {
+      weekMap.set(key, {
+        v: 0,
+        start: weekStart(r.date)
+      });
+    }
+    weekMap.get(key).v += r.enter;
+  });
+  const weekly = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, w]) => ({
+    v: w.v,
+    start: w.start
+  }));
+
+  // По місяцях у людинах (за весь час)
+  const monthlyAll = new Map();
+  allEnters.forEach(r => {
+    const k = r.date.getFullYear() + '-' + r.date.getMonth();
+    if (!monthlyAll.has(k)) monthlyAll.set(k, {
+      year: r.date.getFullYear(),
+      mIdx: r.date.getMonth(),
+      month: MONTH_UA[r.date.getMonth()],
+      v: 0
+    });
+    monthlyAll.get(k).v += r.enter;
+  });
+  const monthlyAllTime = [...monthlyAll.values()].sort((a, b) => a.year - b.year || a.mIdx - b.mIdx);
+
+  // Stats for entire dataset (за весь час — для age/gender %)
+  const allGenderMap = {
+    Ч: 0,
+    Ж: 0,
+    '-': 0
+  };
+  const allAgeGroupMap = new Map();
+  allEnters.forEach(r => {
+    const g = r.gender || '-';
+    const k = g === 'Ч' || g === 'Ж' ? g : '-';
+    allGenderMap[k] += r.enter;
+    if (r.ageGroup) allAgeGroupMap.set(r.ageGroup, (allAgeGroupMap.get(r.ageGroup) || 0) + r.enter);
+  });
+  const allGenderTotal = allGenderMap.Ч + allGenderMap.Ж || 1; // без '-' у %
+  const genderAllTime = [{
+    name: 'Чоловіки',
+    v: allGenderMap.Ч,
+    pct: Math.round(allGenderMap.Ч / allGenderTotal * 1000) / 10
+  }, {
+    name: 'Жінки',
+    v: allGenderMap.Ж,
+    pct: Math.round(allGenderMap.Ж / allGenderTotal * 1000) / 10
+  }].filter(g => g.v > 0);
+  const ageOrderAll = ['0-17', '18-35', '36-50', '51+'];
+  const ageAllTotal = [...allAgeGroupMap.values()].reduce((a, b) => a + b, 0) || 1;
+  const ageGroupsAllTime = [...allAgeGroupMap.entries()].map(([name, v]) => ({
+    name,
+    v,
+    pct: Math.round(v / ageAllTotal * 1000) / 10
+  })).sort((a, b) => {
+    const ia = ageOrderAll.indexOf(a.name),
+      ib = ageOrderAll.indexOf(b.name);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    return a.name.localeCompare(b.name);
   });
   const dates = enterRecords.map(r => r.date);
   const range = dates.length ? {
     from: new Date(Math.min(...dates)),
     to: new Date(Math.max(...dates))
   } : null;
+
+  // visitsByDate для Ratio
+  const visitsByDate = {};
+  enterRecords.forEach(r => {
+    const k = dateKey(r.date);
+    visitsByDate[k] = (visitsByDate[k] || 0) + 1;
+  });
+
+  // Peak hour: з hourlyByDay['all']
+  let peakHour = null,
+    peakV = 0;
+  (hourlyByDay['all'] || []).forEach(x => {
+    if (x.avg > peakV) {
+      peakV = x.avg;
+      peakHour = x.h;
+    }
+  });
   return {
     totalVisitors,
     gender: genderMap,
@@ -1079,13 +1438,21 @@ function aggregateTraffic(rows, opts = {}) {
     avgDuration,
     durationBuckets,
     peakHour,
-    peakHourVisits: peakV,
+    peakHourVisits: Math.round(peakV * 10) / 10,
     monthly,
     weekday,
-    hourly,
+    hourly: hourlyByDay['all'] || [],
+    hourlyByDay,
     visitsByDate,
     range,
-    count: enterRecords.length
+    count: enterRecords.length,
+    currentWeek,
+    last7Trend,
+    last7Days,
+    weekly,
+    monthlyAllTime,
+    genderAllTime,
+    ageGroupsAllTime
   };
 }
 function emptyTraffic() {
@@ -1104,19 +1471,36 @@ function emptyTraffic() {
     monthly: [],
     weekday: [],
     hourly: [],
+    hourlyByDay: {},
     visitsByDate: {},
     range: null,
-    count: 0
+    count: 0,
+    currentWeek: {
+      visitors: 0,
+      range: null
+    },
+    last7Trend: {
+      current: 0,
+      previous: 0,
+      deltaPct: null
+    },
+    last7Days: [],
+    weekly: [],
+    monthlyAllTime: [],
+    genderAllTime: [],
+    ageGroupsAllTime: []
   };
 }
 
-// Ratio: візитів / чеків, по спільних датах
+// Ratio: клієнти / чеки, рахуємо з TRAFFIC_START (10.04.2026) — до цієї дати не було сенсора
 function computeRatio(sales, traffic) {
+  const trafficStartKey = dateKey(TRAFFIC_START);
   const dates = new Set([...Object.keys(sales.receiptsByDate || {}), ...Object.keys(traffic.visitsByDate || {})]);
   let v = 0,
     r = 0;
   const daily = [];
   [...dates].sort().forEach(d => {
+    if (d < trafficStartKey) return; // пропускаємо sales до TRAFFIC_START
     const visits = traffic.visitsByDate[d] || 0;
     const receipts = sales.receiptsByDate[d] || 0;
     v += visits;
@@ -1128,7 +1512,7 @@ function computeRatio(sales, traffic) {
     });
   });
   const ratio = r > 0 ? v / r : 0; // клієнти на 1 чек
-  const conversion = v > 0 ? r / v * 100 : 0; // % конверсії
+  const conversion = v > 0 ? r / v * 100 : 0;
   return {
     ratio,
     conversion,
@@ -1149,6 +1533,7 @@ window.AGGREGATOR = {
   WEEK_UA_FULL
 };
 })();
+
 
 ;(function(){
 // DataStore — єдине джерело даних застосунку.
@@ -1245,6 +1630,7 @@ window.DATA_STORE = {
   useDataStore
 };
 })();
+
 
 ;(function(){
 // PullToRefresh — обгортка зверху над скролом.
@@ -1411,6 +1797,818 @@ window.PTR = {
 };
 })();
 
+
+;(function(){
+// MoreExtras — Нотатки + Файли + Підписка на автоматичні звіти
+
+const {
+  PALETTE: ME_PAL
+} = window.CHARTS;
+const ME_MONO = '"JetBrains Mono", ui-monospace, monospace';
+
+// ── NOTES ──────────────────────────────────────────────────────
+const NOTES_KEY = 'adicto.notes.v1';
+function loadNotes() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+function saveNotes(notes) {
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+}
+function NotesSection({
+  userEmail
+}) {
+  const [notes, setNotes] = React.useState(loadNotes);
+  const [draft, setDraft] = React.useState('');
+  const [editingId, setEditingId] = React.useState(null);
+  const [editingText, setEditingText] = React.useState('');
+  function addNote() {
+    const text = draft.trim();
+    if (!text) return;
+    const next = [{
+      id: Date.now(),
+      text,
+      createdAt: new Date().toISOString(),
+      author: userEmail
+    }, ...notes];
+    setNotes(next);
+    saveNotes(next);
+    setDraft('');
+  }
+  function deleteNote(id) {
+    if (!confirm('Видалити цей запис?')) return;
+    const next = notes.filter(n => n.id !== id);
+    setNotes(next);
+    saveNotes(next);
+  }
+  function startEdit(n) {
+    setEditingId(n.id);
+    setEditingText(n.text);
+  }
+  function saveEdit() {
+    const next = notes.map(n => n.id === editingId ? {
+      ...n,
+      text: editingText,
+      updatedAt: new Date().toISOString()
+    } : n);
+    setNotes(next);
+    saveNotes(next);
+    setEditingId(null);
+    setEditingText('');
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(SectionTitle, {
+    label: "\u041D\u043E\u0442\u0430\u0442\u043A\u0438",
+    hint: `${notes.length}`
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fffbf0',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 12,
+      padding: 12
+    }
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: draft,
+    onChange: e => setDraft(e.target.value),
+    placeholder: "\u041D\u0430\u043F\u0438\u0448\u0456\u0442\u044C \u043D\u043E\u0442\u0430\u0442\u043A\u0443 \u2014 \u0441\u043F\u043E\u0441\u0442\u0435\u0440\u0435\u0436\u0435\u043D\u043D\u044F, \u043F\u043B\u0430\u043D\u0438, \u043D\u0430\u0433\u0430\u0434\u0443\u0432\u0430\u043D\u043D\u044F\u2026",
+    rows: 3,
+    style: {
+      width: '100%',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 8,
+      padding: 10,
+      fontFamily: ME_MONO,
+      fontSize: 12,
+      color: ME_PAL.ink,
+      background: '#fffdf5',
+      resize: 'vertical',
+      outline: 'none',
+      boxSizing: 'border-box'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: addNote,
+    disabled: !draft.trim(),
+    style: btnPrimary(!draft.trim())
+  }, "\uFF0B \u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8
+    }
+  }, notes.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '24px 12px',
+      textAlign: 'center',
+      fontFamily: ME_MONO,
+      fontSize: 10,
+      color: ME_PAL.subtle,
+      letterSpacing: 0.4,
+      border: `1px dashed ${ME_PAL.line}`,
+      borderRadius: 10
+    }
+  }, "\u041F\u043E\u043A\u0438 \u043D\u0435\u043C\u0430\u0454 \u043D\u043E\u0442\u0430\u0442\u043E\u043A"), notes.map(n => /*#__PURE__*/React.createElement("div", {
+    key: n.id,
+    style: {
+      background: '#fffbf0',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 10,
+      padding: 12
+    }
+  }, editingId === n.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("textarea", {
+    value: editingText,
+    onChange: e => setEditingText(e.target.value),
+    rows: 3,
+    style: {
+      width: '100%',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 8,
+      padding: 8,
+      fontFamily: ME_MONO,
+      fontSize: 12,
+      color: ME_PAL.ink,
+      background: '#fffdf5',
+      resize: 'vertical',
+      outline: 'none',
+      boxSizing: 'border-box'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      justifyContent: 'flex-end',
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setEditingId(null),
+    style: btnGhost
+  }, "\u0421\u043A\u0430\u0441\u0443\u0432\u0430\u0442\u0438"), /*#__PURE__*/React.createElement("button", {
+    onClick: saveEdit,
+    style: btnPrimary(false)
+  }, "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 12,
+      color: ME_PAL.ink,
+      whiteSpace: 'pre-wrap',
+      lineHeight: 1.5
+    }
+  }, n.text), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 8,
+      paddingTop: 8,
+      borderTop: `1px solid ${ME_PAL.line}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      color: ME_PAL.muted,
+      letterSpacing: 0.3
+    }
+  }, fmtDateTime(n.createdAt), n.updatedAt ? ' · ред.' : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => startEdit(n),
+    style: btnIcon
+  }, "\u270E"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => deleteNote(n.id),
+    style: btnIconDanger
+  }, "\u2715"))))))));
+}
+
+// ── FILES ──────────────────────────────────────────────────────
+const FILES_KEY = 'adicto.files.v1';
+function loadFiles() {
+  try {
+    return JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+function saveFiles(files) {
+  try {
+    localStorage.setItem(FILES_KEY, JSON.stringify(files));
+    return true;
+  } catch (e) {
+    alert('Не вистачає місця у сховищі. Видаліть старі файли.');
+    return false;
+  }
+}
+
+// Ліміт — файли дозволяємо до 5 MB (щоб не зламати localStorage, він ~5-10 MB)
+const FILE_MAX_MB = 3;
+function FilesSection({
+  userEmail
+}) {
+  const [files, setFiles] = React.useState(loadFiles);
+  const inputRef = React.useRef(null);
+  function handlePick(e) {
+    const list = [...(e.target.files || [])];
+    if (!list.length) return;
+    const tasks = list.map(f => new Promise((resolve, reject) => {
+      if (f.size > FILE_MAX_MB * 1024 * 1024) {
+        alert(`"${f.name}" — більше ${FILE_MAX_MB} МБ. Пропускаю.`);
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve({
+        id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        dataUrl: reader.result,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: userEmail
+      });
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(f);
+    }));
+    Promise.all(tasks).then(results => {
+      const ok = results.filter(Boolean);
+      if (!ok.length) return;
+      const next = [...ok, ...files];
+      if (saveFiles(next)) setFiles(next);
+    });
+    e.target.value = '';
+  }
+  function remove(id) {
+    if (!confirm('Видалити файл?')) return;
+    const next = files.filter(f => f.id !== id);
+    if (saveFiles(next)) setFiles(next);
+  }
+  function download(f) {
+    const a = document.createElement('a');
+    a.href = f.dataUrl;
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(SectionTitle, {
+    label: "\u0424\u0430\u0439\u043B\u0438",
+    hint: `${files.length} · до ${FILE_MAX_MB} МБ/файл`
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fffbf0',
+      border: `1px dashed ${ME_PAL.line}`,
+      borderRadius: 12,
+      padding: 16,
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    ref: inputRef,
+    type: "file",
+    multiple: true,
+    onChange: handlePick,
+    style: {
+      display: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => inputRef.current?.click(),
+    style: btnPrimary(false)
+  }, "\u2191 \u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0438\u0442\u0438 \u0444\u0430\u0439\u043B"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      color: ME_PAL.subtle,
+      letterSpacing: 0.3,
+      marginTop: 8
+    }
+  }, "\u0417\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044C\u0441\u044F \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E \u043D\u0430 \u0446\u044C\u043E\u043C\u0443 \u043F\u0440\u0438\u0441\u0442\u0440\u043E\u0457")), files.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }
+  }, files.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id,
+    style: {
+      background: '#fffbf0',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 10,
+      padding: '10px 12px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 18,
+      color: ME_PAL.muted
+    }
+  }, fileIcon(f.type)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 11,
+      color: ME_PAL.ink,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, f.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      color: ME_PAL.muted,
+      marginTop: 2
+    }
+  }, fmtBytes(f.size), " \xB7 ", fmtDateTime(f.uploadedAt))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => download(f),
+    style: btnIcon,
+    title: "\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0438\u0442\u0438"
+  }, "\u2193"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => remove(f.id),
+    style: btnIconDanger,
+    title: "\u0412\u0438\u0434\u0430\u043B\u0438\u0442\u0438"
+  }, "\u2715")))));
+}
+
+// ── SUBSCRIPTIONS ──────────────────────────────────────────────
+const SUBS_KEY = 'adicto.subs.v1';
+const REPORT_TYPES = [{
+  id: 'traffic_w',
+  label: 'Трафік — тижневий',
+  cadence: 'weekly'
+}, {
+  id: 'traffic_m',
+  label: 'Трафік — місячний',
+  cadence: 'monthly'
+}, {
+  id: 'sales_w',
+  label: 'Продажі — тижневі',
+  cadence: 'weekly'
+}, {
+  id: 'sales_m',
+  label: 'Продажі — місячні',
+  cadence: 'monthly'
+}];
+function loadSubs() {
+  try {
+    return JSON.parse(localStorage.getItem(SUBS_KEY) || 'null') || {
+      active: false,
+      selected: [],
+      email: ''
+    };
+  } catch {
+    return {
+      active: false,
+      selected: [],
+      email: ''
+    };
+  }
+}
+function saveSubs(s) {
+  localStorage.setItem(SUBS_KEY, JSON.stringify(s));
+}
+function SubscriptionsSection({
+  userEmail
+}) {
+  const [subs, setSubs] = React.useState(() => {
+    const s = loadSubs();
+    if (!s.email && userEmail) s.email = userEmail;
+    return s;
+  });
+  const [draft, setDraft] = React.useState(subs);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(subs);
+  function toggleReport(id) {
+    const next = draft.selected.includes(id) ? draft.selected.filter(x => x !== id) : [...draft.selected, id];
+    setDraft({
+      ...draft,
+      selected: next
+    });
+  }
+  function confirmSubscription() {
+    const next = {
+      ...draft,
+      active: draft.selected.length > 0,
+      confirmedAt: new Date().toISOString()
+    };
+    setSubs(next);
+    saveSubs(next);
+    setConfirmOpen(false);
+  }
+  function unsubscribe() {
+    if (!confirm('Відписатись від усіх звітів?')) return;
+    const next = {
+      ...subs,
+      active: false,
+      selected: []
+    };
+    setSubs(next);
+    setDraft(next);
+    saveSubs(next);
+  }
+  const statusColor = subs.active ? '#7aa875' : ME_PAL.muted;
+  const statusLabel = subs.active ? 'Підписаний' : 'Не підписаний';
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(SectionTitle, {
+    label: "\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u0430 \u0432\u0456\u0434\u043F\u0440\u0430\u0432\u043A\u0430 \u0437\u0432\u0456\u0442\u0456\u0432",
+    hint: /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: statusColor
+      }
+    }, "\u25CF ", statusLabel)
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fffbf0',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 12,
+      padding: 14
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      cursor: 'pointer',
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: draft.selected.length > 0,
+    onChange: e => {
+      if (!e.target.checked) setDraft({
+        ...draft,
+        selected: []
+      });else if (draft.selected.length === 0) setDraft({
+        ...draft,
+        selected: ['traffic_w']
+      });
+    },
+    style: {
+      width: 18,
+      height: 18,
+      accentColor: ME_PAL.ink,
+      marginTop: 1,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 12,
+      color: ME_PAL.ink,
+      fontWeight: 500
+    }
+  }, "\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u0430 \u0432\u0456\u0434\u043F\u0440\u0430\u0432\u043A\u0430 \u0437\u0432\u0456\u0442\u0456\u0432"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 10,
+      color: ME_PAL.subtle,
+      marginTop: 3,
+      lineHeight: 1.5
+    }
+  }, "\u0422\u0438\u0436\u043D\u0435\u0432\u0456 \u2014 \u043A\u043E\u0436\u043D\u0443 \u043D\u0435\u0434\u0456\u043B\u044E \u043E 20:00.", /*#__PURE__*/React.createElement("br", null), "\u041C\u0456\u0441\u044F\u0447\u043D\u0456 \u2014 1-\u0433\u043E \u0447\u0438\u0441\u043B\u0430 \u043D\u0430\u0441\u0442\u0443\u043F\u043D\u043E\u0433\u043E \u043C\u0456\u0441\u044F\u0446\u044F."))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: `1px solid ${ME_PAL.line}`,
+      paddingTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: ME_PAL.muted,
+      marginBottom: 10
+    }
+  }, "\u041E\u0431\u0440\u0430\u0442\u0438 \u0437\u0432\u0456\u0442\u0438"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }
+  }, REPORT_TYPES.map(r => {
+    const on = draft.selected.includes(r.id);
+    return /*#__PURE__*/React.createElement("label", {
+      key: r.id,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        cursor: 'pointer',
+        padding: '8px 10px',
+        borderRadius: 8,
+        background: on ? '#f5ecd2' : 'transparent',
+        border: `1px solid ${on ? ME_PAL.ink : ME_PAL.line}`
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: on,
+      onChange: () => toggleReport(r.id),
+      style: {
+        width: 16,
+        height: 16,
+        accentColor: ME_PAL.ink,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: ME_MONO,
+        fontSize: 11,
+        color: ME_PAL.ink
+      }
+    }, r.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: ME_MONO,
+        fontSize: 9,
+        color: ME_PAL.muted,
+        marginTop: 1,
+        letterSpacing: 0.3
+      }
+    }, r.cadence === 'weekly' ? 'щонеділі' : '1-го числа місяця')));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: `1px solid ${ME_PAL.line}`,
+      marginTop: 14,
+      paddingTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: ME_PAL.muted,
+      marginBottom: 6
+    }
+  }, "Email \u0434\u043B\u044F \u0432\u0456\u0434\u043F\u0440\u0430\u0432\u043A\u0438"), /*#__PURE__*/React.createElement("input", {
+    value: draft.email || '',
+    onChange: e => setDraft({
+      ...draft,
+      email: e.target.value
+    }),
+    placeholder: "you@domain.com",
+    style: {
+      width: '100%',
+      border: `1px solid ${ME_PAL.line}`,
+      borderRadius: 8,
+      padding: '8px 10px',
+      fontFamily: ME_MONO,
+      fontSize: 12,
+      color: ME_PAL.ink,
+      background: '#fffdf5',
+      outline: 'none',
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginTop: 14
+    }
+  }, subs.active && /*#__PURE__*/React.createElement("button", {
+    onClick: unsubscribe,
+    style: btnGhostDanger
+  }, "\u0412\u0456\u0434\u043F\u0438\u0441\u0430\u0442\u0438\u0441\u044F"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmOpen(true),
+    disabled: !dirty || draft.selected.length === 0 || !draft.email,
+    style: {
+      ...btnPrimary(!dirty || draft.selected.length === 0 || !draft.email),
+      marginLeft: 'auto'
+    }
+  }, subs.active ? 'Оновити підписку' : 'Підтвердити'))), confirmOpen && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "\u041F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0438 \u043F\u0456\u0434\u043F\u0438\u0441\u043A\u0443",
+    body: /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: ME_MONO,
+        fontSize: 11,
+        color: ME_PAL.ink,
+        marginBottom: 10
+      }
+    }, "\u0417\u0432\u0456\u0442\u0438 \u0431\u0443\u0434\u0443\u0442\u044C \u043D\u0430\u0434\u0441\u0438\u043B\u0430\u0442\u0438\u0441\u044F \u043D\u0430 ", /*#__PURE__*/React.createElement("b", null, draft.email), ":"), /*#__PURE__*/React.createElement("ul", {
+      style: {
+        margin: 0,
+        paddingLeft: 18,
+        fontFamily: ME_MONO,
+        fontSize: 11,
+        color: ME_PAL.ink,
+        lineHeight: 1.6
+      }
+    }, REPORT_TYPES.filter(r => draft.selected.includes(r.id)).map(r => /*#__PURE__*/React.createElement("li", {
+      key: r.id
+    }, r.label, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: ME_PAL.muted
+      }
+    }, "\u2014 ", r.cadence === 'weekly' ? 'щонеділі 20:00' : '1-го числа о 09:00'))))),
+    onConfirm: confirmSubscription,
+    onCancel: () => setConfirmOpen(false)
+  }));
+}
+
+// ── HELPERS ────────────────────────────────────────────────────
+function SectionTitle({
+  label,
+  hint
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      margin: '18px 0 8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 10,
+      letterSpacing: 1.3,
+      textTransform: 'uppercase',
+      color: ME_PAL.ink,
+      fontWeight: 600
+    }
+  }, label), hint != null && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 9,
+      color: ME_PAL.muted,
+      letterSpacing: 0.4
+    }
+  }, hint));
+}
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1024 / 1024).toFixed(2) + ' MB';
+}
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} · ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fileIcon(type) {
+  if (!type) return '◫';
+  if (type.startsWith('image/')) return '▦';
+  if (type.includes('pdf')) return '▤';
+  if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) return '▥';
+  if (type.includes('word') || type.includes('document')) return '▣';
+  if (type.startsWith('video/')) return '▸';
+  if (type.startsWith('audio/')) return '♪';
+  return '◫';
+}
+function ConfirmModal({
+  title,
+  body,
+  onConfirm,
+  onCancel
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(26,21,16,0.5)',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      zIndex: 200,
+      padding: 16
+    },
+    onClick: onCancel
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: '#fdf9ee',
+      borderRadius: 16,
+      padding: 20,
+      maxWidth: 420,
+      width: '100%',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: ME_MONO,
+      fontSize: 11,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: ME_PAL.ink,
+      fontWeight: 600,
+      marginBottom: 12
+    }
+  }, title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, body), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onCancel,
+    style: {
+      ...btnGhost,
+      flex: 1
+    }
+  }, "\u0421\u043A\u0430\u0441\u0443\u0432\u0430\u0442\u0438"), /*#__PURE__*/React.createElement("button", {
+    onClick: onConfirm,
+    style: {
+      ...btnPrimary(false),
+      flex: 1
+    }
+  }, "\u041F\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0438"))));
+}
+
+// ── BUTTON STYLES ──────────────────────────────────────────────
+const btnBase = {
+  fontFamily: ME_MONO,
+  fontSize: 10,
+  letterSpacing: 1,
+  textTransform: 'uppercase',
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: 100,
+  padding: '9px 16px',
+  transition: 'opacity .15s'
+};
+function btnPrimary(disabled) {
+  return {
+    ...btnBase,
+    background: disabled ? '#d8cfb6' : ME_PAL.ink,
+    color: '#f1ead8',
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? 'default' : 'pointer'
+  };
+}
+const btnGhost = {
+  ...btnBase,
+  background: 'transparent',
+  border: `1px solid ${ME_PAL.line}`,
+  color: ME_PAL.ink,
+  padding: '8px 15px'
+};
+const btnGhostDanger = {
+  ...btnBase,
+  background: 'transparent',
+  border: `1px solid #d7a398`,
+  color: '#a0472e',
+  padding: '8px 15px'
+};
+const btnIcon = {
+  background: 'transparent',
+  border: `1px solid ${ME_PAL.line}`,
+  borderRadius: 6,
+  width: 28,
+  height: 28,
+  cursor: 'pointer',
+  fontFamily: ME_MONO,
+  fontSize: 12,
+  color: ME_PAL.ink,
+  padding: 0
+};
+const btnIconDanger = {
+  ...btnIcon,
+  color: '#a0472e',
+  borderColor: '#e0c4be'
+};
+
+// ── EXPORTS ────────────────────────────────────────────────────
+window.MORE_EXTRAS = {
+  NotesSection,
+  FilesSection,
+  SubscriptionsSection
+};
+})();
+
+
 ;(function(){
 // Screens — малює екрани з агрегованих даних.
 
@@ -1431,7 +2629,8 @@ const {
 const {
   MONTH_UA,
   MONTH_UA_FULL,
-  WEEK_UA
+  WEEK_UA,
+  WEEK_UA_FULL
 } = window.AGGREGATOR;
 const SC_MONO = '"JetBrains Mono", ui-monospace, monospace';
 function Section({
@@ -1446,7 +2645,7 @@ function Section({
 
 // Справжнє лого ADICTO (чорна версія)
 function AdictoLogo({
-  size = 22
+  size = 18
 }) {
   return /*#__PURE__*/React.createElement("img", {
     src: "logo.png",
@@ -1501,16 +2700,105 @@ function ScreenHeader({
   }, subtitle)), right));
 }
 
-// Форматер дати в стилі 10.04.2026
+// ── Форматери ─────────────────────────
 function fmtDate(d) {
   if (!d) return '';
   return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
 }
-function DateRangeLabel({
-  range
+function fmtDateShort(d) {
+  if (!d) return '';
+  return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// ── Inline Date Range Picker (по клацанню відкриваються input type="date") ──
+function DateRangeInline({
+  range,
+  customFrom,
+  customTo,
+  onCustomChange,
+  onActivate,
+  isActive
 }) {
   if (!range) return null;
-  return /*#__PURE__*/React.createElement("div", {
+  const from = isActive && customFrom ? new Date(customFrom) : range.from;
+  const to = isActive && customTo ? new Date(customTo) : range.to;
+  const [editing, setEditing] = React.useState(false);
+  React.useEffect(() => {
+    if (!isActive) setEditing(false);
+  }, [isActive]);
+  const dateStr = d => d ? d.toISOString().slice(0, 10) : '';
+  if (editing) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 10px',
+        borderRadius: 100,
+        background: '#fffbf0',
+        border: `1px solid ${PALETTE.ink}`,
+        fontFamily: SC_MONO,
+        fontSize: 10,
+        color: PALETTE.ink
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "date",
+      defaultValue: customFrom || dateStr(range.from),
+      onChange: e => {
+        onActivate();
+        onCustomChange({
+          from: e.target.value,
+          to: customTo || dateStr(range.to)
+        });
+      },
+      style: {
+        border: 'none',
+        background: 'transparent',
+        fontFamily: SC_MONO,
+        fontSize: 10,
+        color: PALETTE.ink,
+        padding: 0,
+        outline: 'none'
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: PALETTE.muted
+      }
+    }, "\u2014"), /*#__PURE__*/React.createElement("input", {
+      type: "date",
+      defaultValue: customTo || dateStr(range.to),
+      onChange: e => {
+        onActivate();
+        onCustomChange({
+          from: customFrom || dateStr(range.from),
+          to: e.target.value
+        });
+      },
+      style: {
+        border: 'none',
+        background: 'transparent',
+        fontFamily: SC_MONO,
+        fontSize: 10,
+        color: PALETTE.ink,
+        padding: 0,
+        outline: 'none'
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setEditing(false),
+      style: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        color: PALETTE.muted,
+        fontSize: 14,
+        padding: 0,
+        marginLeft: 4,
+        lineHeight: 1
+      }
+    }, "\u2713"));
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: () => setEditing(true),
     style: {
       display: 'inline-flex',
       alignItems: 'center',
@@ -1523,22 +2811,26 @@ function DateRangeLabel({
       fontSize: 9.5,
       letterSpacing: 0.8,
       textTransform: 'uppercase',
-      color: PALETTE.ink
+      color: PALETTE.ink,
+      cursor: 'pointer'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       color: PALETTE.accent
     }
-  }, "\u25E7"), fmtDate(range.from), " \u2014 ", fmtDate(range.to));
+  }, "\u20AC"), fmtDate(from), " \u2014 ", fmtDate(to), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: PALETTE.muted,
+      marginLeft: 4,
+      fontSize: 11
+    }
+  }, "\u270E"));
 }
 
-// ── Period Selector (4 options + Custom) ──────────────
+// ── Period Selector (7/30/90/Рік/Все) ──
 function PeriodSelector({
   current,
-  onChange,
-  customFrom,
-  customTo,
-  onCustomChange
+  onChange
 }) {
   const opts = [{
     id: '7',
@@ -1550,26 +2842,13 @@ function PeriodSelector({
     id: '90',
     label: '90 дн'
   }, {
+    id: '365',
+    label: 'Рік'
+  }, {
     id: 'all',
     label: 'Все'
-  }, {
-    id: 'custom',
-    label: '● Дати'
   }];
-  const isCustom = current === 'custom';
-  const inputStyle = {
-    fontFamily: SC_MONO,
-    fontSize: 11,
-    padding: '8px 10px',
-    background: '#fffbf0',
-    border: `1px solid ${PALETTE.line}`,
-    borderRadius: 8,
-    color: PALETTE.ink,
-    outline: 'none',
-    flex: 1,
-    minWidth: 0
-  };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       background: '#ede5d0',
@@ -1598,36 +2877,483 @@ function PeriodSelector({
         boxShadow: active ? '0 1px 2px rgba(0,0,0,0.04)' : 'none'
       }
     }, o.label);
-  })), isCustom && /*#__PURE__*/React.createElement("div", {
+  }));
+}
+
+// ── Button: Export PDF ──
+function ExportPdfButton({
+  label = 'ЕКСПОРТ PDF',
+  onClick
+}) {
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '7px 12px',
+      borderRadius: 100,
+      background: PALETTE.ink,
+      border: `1px solid ${PALETTE.ink}`,
+      fontFamily: SC_MONO,
+      fontSize: 9.5,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: '#f1ead8',
+      cursor: 'pointer',
+      fontWeight: 500
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\u21E3"), label);
+}
+
+// ── Chart Comments (yellow dot + composer + thread) ──
+const COMMENTS_KEY = 'adicto.comments.v1';
+const ADMIN_EMAIL = 'vasile@adicto.bike';
+function loadComments() {
+  try {
+    return JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+function saveComments(all) {
+  localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+}
+function CommentThread({
+  chartId,
+  userEmail
+}) {
+  const [all, setAll] = React.useState(() => loadComments());
+  const [draft, setDraft] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const items = all[chartId] || [];
+  const isAdmin = userEmail === ADMIN_EMAIL;
+  const add = () => {
+    if (!draft.trim()) return;
+    const next = {
+      ...all
+    };
+    next[chartId] = [...(next[chartId] || []), {
+      id: 'c_' + Date.now(),
+      author: userEmail || '—',
+      text: draft.trim(),
+      at: Date.now()
+    }];
+    saveComments(next);
+    setAll(next);
+    setDraft('');
+    // Прокидуємо пост-комент на admin email через mailto (fallback)
+    try {
+      const subj = encodeURIComponent(`[ADICTO] Коментар: ${chartId}`);
+      const body = encodeURIComponent(`${userEmail}: ${draft.trim()}`);
+      window.open(`mailto:${ADMIN_EMAIL}?subject=${subj}&body=${body}`, '_blank');
+    } catch {}
+  };
+  const reply = idx => {
+    const t = prompt('Ваша відповідь:');
+    if (!t || !t.trim()) return;
+    const next = {
+      ...all
+    };
+    next[chartId] = next[chartId].map((c, i) => i === idx ? {
+      ...c,
+      replies: [...(c.replies || []), {
+        author: userEmail || '—',
+        text: t.trim(),
+        at: Date.now()
+      }]
+    } : c);
+    saveComments(next);
+    setAll(next);
+  };
+  const del = idx => {
+    if (!confirm('Видалити коментар?')) return;
+    const next = {
+      ...all
+    };
+    next[chartId] = next[chartId].filter((_, i) => i !== idx);
+    saveComments(next);
+    setAll(next);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(!open),
+    title: items.length ? `${items.length} коментарів` : 'Додати коментар',
+    style: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      zIndex: 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      background: items.length ? '#f5c843' : 'transparent',
+      border: `1.5px solid ${items.length ? '#c9a521' : PALETTE.line}`,
+      cursor: 'pointer',
+      padding: 0,
+      fontFamily: SC_MONO,
+      fontSize: 10,
+      fontWeight: 600,
+      color: items.length ? '#1a1510' : PALETTE.muted,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: items.length ? '0 0 0 3px rgba(245,200,67,0.25)' : 'none'
+    }
+  }, items.length || '+'), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      top: 24,
+      right: -4,
+      width: 300,
+      zIndex: 20,
+      background: '#fffbf0',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 12,
+      boxShadow: '0 12px 40px rgba(0,0,0,0.14)',
+      padding: 12,
+      fontFamily: SC_MONO,
+      fontSize: 11,
+      color: PALETTE.ink
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: PALETTE.muted,
+      marginBottom: 10,
+      display: 'flex',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\u041A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0456"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(false),
+    style: {
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      color: PALETTE.muted,
+      padding: 0,
+      fontSize: 13
+    }
+  }, "\xD7")), items.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: PALETTE.subtle,
+      paddingBottom: 10
+    }
+  }, "\u041A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0456\u0432 \u0449\u0435 \u043D\u0435\u043C\u0430\u0454."), items.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    style: {
+      borderTop: i > 0 ? `1px solid ${PALETTE.line}` : 'none',
+      paddingTop: i > 0 ? 10 : 0,
+      paddingBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      color: PALETTE.muted,
+      marginBottom: 2,
+      display: 'flex',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, c.author), /*#__PURE__*/React.createElement("span", null, new Date(c.at).toLocaleDateString('uk-UA'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      lineHeight: 1.4
+    }
+  }, c.text), (c.replies || []).map((r, ri) => /*#__PURE__*/React.createElement("div", {
+    key: ri,
+    style: {
+      marginTop: 6,
+      marginLeft: 12,
+      paddingLeft: 10,
+      borderLeft: `2px solid ${PALETTE.line}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      color: PALETTE.muted
+    }
+  }, r.author), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10.5,
+      lineHeight: 1.4
+    }
+  }, r.text))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => reply(i),
+    style: {
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      padding: 0,
+      fontFamily: SC_MONO,
+      fontSize: 9,
+      color: PALETTE.accent,
+      textDecoration: 'underline'
+    }
+  }, "\u0412\u0456\u0434\u043F\u043E\u0432\u0456\u0441\u0442\u0438"), (c.author === userEmail || isAdmin) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => del(i),
+    style: {
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      padding: 0,
+      fontFamily: SC_MONO,
+      fontSize: 9,
+      color: '#c47862',
+      textDecoration: 'underline'
+    }
+  }, "\u0412\u0438\u0434\u0430\u043B\u0438\u0442\u0438")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: draft,
+    onChange: e => setDraft(e.target.value),
+    rows: 2,
+    placeholder: "\u0412\u0430\u0448 \u043A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u2026",
+    style: {
+      width: '100%',
+      boxSizing: 'border-box',
+      resize: 'none',
+      fontFamily: SC_MONO,
+      fontSize: 11,
+      padding: 8,
+      background: '#f1ead8',
+      border: `1px solid ${PALETTE.line}`,
+      borderRadius: 8,
+      color: PALETTE.ink,
+      outline: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: add,
+    disabled: !draft.trim(),
+    style: {
+      marginTop: 6,
+      padding: '6px 12px',
+      background: PALETTE.ink,
+      color: '#f1ead8',
+      border: 'none',
+      borderRadius: 6,
+      cursor: draft.trim() ? 'pointer' : 'default',
+      fontFamily: SC_MONO,
+      fontSize: 9,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      opacity: draft.trim() ? 1 : 0.4
+    }
+  }, "\u041D\u0430\u0434\u0456\u0441\u043B\u0430\u0442\u0438"))));
+}
+
+// Обгортка для ChartCard що додає CommentThread
+function CommentableCard({
+  id,
+  title,
+  subtitle,
+  right,
+  children,
+  userEmail
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement(CommentThread, {
+    chartId: id,
+    userEmail: userEmail
+  }), /*#__PURE__*/React.createElement(ChartCard, {
+    title: title,
+    subtitle: subtitle,
+    right: right
+  }, children));
+}
+
+// ── HOME ───────────────────────────────
+function HomeScreen({
+  sales,
+  traffic,
+  accent,
+  updated,
+  source,
+  userEmail
+}) {
+  const cw = sales.currentWeek || {
+    gross: 0,
+    profit: 0,
+    count: 0,
+    docs: 0,
+    range: null
+  };
+  const ww = sales.workshopWeek || {
+    gross: 0,
+    profit: 0,
+    count: 0,
+    docs: 0
+  };
+  const tw = traffic.currentWeek || {
+    visitors: 0,
+    range: null
+  };
+  const trend = traffic.last7Trend || {
+    deltaPct: null
+  };
+  const wkRange = cw.range ? `${fmtDateShort(cw.range.from)} — ${fmtDateShort(cw.range.to)}` : '';
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      paddingBottom: 120
+    }
+  }, /*#__PURE__*/React.createElement(ScreenHeader, {
+    title: "Overview",
+    subtitle: updatedLabel(updated, source)
+  }), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "home-sales",
+    userEmail: userEmail,
+    title: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456 \xB7 \u041F\u043E\u0442\u043E\u0447\u043D\u0438\u0439 \u0442\u0438\u0436\u0434\u0435\u043D\u044C",
+    subtitle: wkRange
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
-      marginTop: 8,
-      alignItems: 'center'
+      marginBottom: 8
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "date",
-    value: customFrom || '',
-    onChange: e => onCustomChange({
-      from: e.target.value,
-      to: customTo
-    }),
-    style: inputStyle
-  }), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u0417 \u041F\u0414\u0412",
+    value: fmt(cw.gross),
+    accent: accent
+  }), /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u041F\u0440\u0438\u0431\u0443\u0442\u043E\u043A",
+    value: fmt(cw.profit)
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
-      color: PALETTE.muted,
-      fontFamily: SC_MONO,
-      fontSize: 12
+      display: 'flex',
+      gap: 8
     }
-  }, "\u2014"), /*#__PURE__*/React.createElement("input", {
-    type: "date",
-    value: customTo || '',
-    onChange: e => onCustomChange({
-      from: customFrom,
-      to: e.target.value
-    }),
-    style: inputStyle
-  })));
+  }, /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u0421\u0435\u0440\u0435\u0434\u043D\u0456\u0439 \u0447\u0435\u043A",
+    value: cw.avgCheck ? fmt(Math.round(cw.avgCheck)) : '—',
+    hint: cw.docs ? `${cw.docs} чеків` : ''
+  }), /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u041E\u043F\u0435\u0440\u0430\u0446\u0456\u0439",
+    value: fmt(cw.docs)
+  }))), /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "home-workshop",
+    userEmail: userEmail,
+    title: /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("svg", {
+      width: "14",
+      height: "14",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      style: {
+        verticalAlign: -2,
+        marginRight: 6
+      }
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+    })), "\u041C\u0430\u0439\u0441\u0442\u0435\u0440\u043D\u044F \xB7 \u041F\u043E\u0442\u043E\u0447\u043D\u0438\u0439 \u0442\u0438\u0436\u0434\u0435\u043D\u044C"),
+    subtitle: "\u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0456\u044F: \u0420\u0435\u043C\u043E\u043D\u0442"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u0417 \u041F\u0414\u0412",
+    value: fmt(ww.gross),
+    accent: accent
+  }), /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u0417\u0430\u043A\u0430\u0437\u0456\u0432",
+    value: fmt(ww.docs)
+  }))), /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "home-traffic",
+    userEmail: userEmail,
+    title: "\u0422\u0440\u0430\u0444\u0456\u043A \xB7 \u041E\u0441\u0442\u0430\u043D\u043D\u0456\u0439 \u0442\u0438\u0436\u0434\u0435\u043D\u044C",
+    subtitle: wkRange
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u041A\u043B\u0456\u0454\u043D\u0442\u0438",
+    value: fmt(tw.visitors),
+    accent: accent,
+    hint: trend.deltaPct != null ? `${trend.deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(trend.deltaPct).toFixed(0)}% vs минулий тиждень` : ''
+  }), /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u041E\u043F\u0435\u0440\u0430\u0446\u0456\u0439",
+    value: fmt(cw.docs)
+  }))), sales.monthly.length > 0 && /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "home-monthly",
+    userEmail: userEmail,
+    title: "\u0414\u0438\u043D\u0430\u043C\u0456\u043A\u0430",
+    subtitle: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456 \u043F\u043E \u043C\u0456\u0441\u044F\u0446\u044F\u043C"
+  }, /*#__PURE__*/React.createElement(BarsV, {
+    data: sales.monthly,
+    keys: ['total'],
+    colors: [PALETTE.ink],
+    labelKey: "month",
+    h: 160,
+    showY: true
+  }))));
+}
+
+// ── Перемикач "Максимальний чек" ─────────────────────────
+function MaxCheckSelector({
+  current,
+  onChange
+}) {
+  const opts = [{
+    v: Infinity,
+    label: 'Усі'
+  }, {
+    v: 5000,
+    label: '< 5к'
+  }, {
+    v: 2000,
+    label: '< 2к'
+  }];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'inline-flex',
+      gap: 0,
+      border: `1px solid ${PALETTE.rule}`,
+      borderRadius: 999,
+      padding: 2,
+      background: PALETTE.paperSub
+    }
+  }, opts.map(o => {
+    const active = current === o.v;
+    return /*#__PURE__*/React.createElement("button", {
+      key: String(o.v),
+      onClick: () => onChange(o.v),
+      title: o.v === Infinity ? 'Без фільтра по сумі чека' : `Виключити чеки ≥ ${o.v.toLocaleString('uk-UA')}`,
+      style: {
+        border: 'none',
+        background: active ? PALETTE.ink : 'transparent',
+        color: active ? PALETTE.paper : PALETTE.muted,
+        fontFamily: SC_MONO,
+        fontSize: 10,
+        fontWeight: 500,
+        padding: '4px 10px',
+        borderRadius: 999,
+        cursor: 'pointer',
+        letterSpacing: '0.02em'
+      }
+    }, o.label);
+  }));
 }
 
 // ── SALES ───────────────────────────────────────────────
@@ -1637,11 +3363,16 @@ function SalesScreen({
   period,
   onPeriodChange,
   customRange,
-  onCustomChange
+  onCustomChange,
+  maxCheck,
+  onMaxCheckChange,
+  userEmail,
+  onExportPdf
 }) {
   const s = data;
-  const [catMode, setCatMode] = React.useState('uah'); // 'uah' | 'pct'
-
+  const [catMode, setCatMode] = React.useState('pct'); // % за замовченням
+  const [payMode, setPayMode] = React.useState('pct');
+  const [dowMode, setDowMode] = React.useState('pct');
   if (!s.count) return /*#__PURE__*/React.createElement(EmptyState, {
     msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445 \u043F\u0440\u043E\u0434\u0430\u0436\u0456\u0432 \u0443 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u043F\u0435\u0440\u0456\u043E\u0434\u0456"
   });
@@ -1655,20 +3386,28 @@ function SalesScreen({
     subtitle: `${s.count} операцій · фінансові звіти`
   }), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+      alignItems: 'center',
       marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement(DateRangeLabel, {
-    range: s.range
+  }, /*#__PURE__*/React.createElement(DateRangeInline, {
+    range: s.range,
+    customFrom: customRange?.from,
+    customTo: customRange?.to,
+    onCustomChange: onCustomChange,
+    onActivate: () => onPeriodChange('custom'),
+    isActive: period === 'custom'
+  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
+    onClick: onExportPdf
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement(PeriodSelector, {
-    current: period,
-    onChange: onPeriodChange,
-    customFrom: customRange?.from,
-    customTo: customRange?.to,
-    onCustomChange: onCustomChange
+    current: period === 'custom' ? 'all' : period,
+    onChange: onPeriodChange
   }))), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -1685,6 +3424,18 @@ function SalesScreen({
     accent: accent
   })), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u0421\u0435\u0440\u0435\u0434\u043D\u0456\u0439 \u0447\u0435\u043A",
+    value: s.avgCheck ? fmt(Math.round(s.avgCheck)) : '—',
+    hint: s.avgCheckDocs ? `${fmt(s.avgCheckDocs)} чеків${maxCheck !== Infinity ? ` · < ${maxCheck.toLocaleString('uk-UA')}` : ''}` : '',
+    extra: onMaxCheckChange ? /*#__PURE__*/React.createElement(MaxCheckSelector, {
+      current: maxCheck,
+      onChange: onMaxCheckChange
+    }) : null
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: 'flex',
       gap: 8,
       marginBottom: 14
@@ -1695,7 +3446,9 @@ function SalesScreen({
   }), /*#__PURE__*/React.createElement(BigStat, {
     label: "\u0417\u0430\u043A\u0443\u043F\u043A\u0430",
     value: fmt(s.totals.cost)
-  }))), s.monthly.length > 1 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
+  }))), s.monthly.length > 1 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-monthly",
+    userEmail: userEmail,
     title: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456 \u043F\u043E \u043C\u0456\u0441\u044F\u0446\u044F\u043C",
     subtitle: `${s.monthly.length} міс · з ПДВ`
   }, /*#__PURE__*/React.createElement(BarsV, {
@@ -1703,17 +3456,20 @@ function SalesScreen({
     keys: ['total'],
     colors: [PALETTE.ink],
     labelKey: "month",
-    h: 180
-  }))), s.categories.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u041A\u0430\u0442\u0435\u0433\u043E\u0440\u0456\u0457 (\u0437\u0430 Familia)",
+    h: 180,
+    showY: true
+  }))), s.categories.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-categories",
+    userEmail: userEmail,
+    title: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456 \u043F\u043E \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0456\u044F\u043C",
     subtitle: catMode === 'uah' ? 'З ПДВ' : '% від загального обороту',
     right: /*#__PURE__*/React.createElement(ValueToggle, {
       options: [{
-        id: 'uah',
-        label: '€'
-      }, {
         id: 'pct',
         label: '%'
+      }, {
+        id: 'uah',
+        label: '€'
       }],
       value: catMode,
       onChange: setCatMode
@@ -1725,24 +3481,47 @@ function SalesScreen({
     })),
     color: PALETTE.ink,
     showPct: catMode === 'pct'
-  }))), s.weekByDay.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
+  }))), s.weekByDay.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-weekday",
+    userEmail: userEmail,
     title: "\u041F\u043E \u0434\u043D\u044F\u0445 \u0442\u0438\u0436\u043D\u044F",
-    subtitle: "\u0421\u0443\u043C\u0430\u0440\u043D\u043E, \u0437 \u041F\u0414\u0412"
+    subtitle: dowMode === 'pct' ? '% від обороту (без неділі, чеки ≤1000€)' : 'З ПДВ (без неділі, чеки ≤1000€)',
+    right: /*#__PURE__*/React.createElement(ValueToggle, {
+      options: [{
+        id: 'pct',
+        label: '%'
+      }, {
+        id: 'uah',
+        label: '€'
+      }],
+      value: dowMode,
+      onChange: setDowMode
+    })
   }, /*#__PURE__*/React.createElement(BarsV, {
-    data: s.weekByDay,
+    data: s.weekByDay.map(d => ({
+      day: d.day,
+      v: dowMode === 'pct' ? d.pct : d.v
+    })),
     keys: ['v'],
     colors: [accent],
     labelKey: "day",
-    h: 160
-  }))), s.timeline.length > 2 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
+    h: 160,
+    showY: true,
+    isPct: dowMode === 'pct'
+  }))), s.timeline.length > 2 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-timeline",
+    userEmail: userEmail,
     title: "\u0422\u0438\u0436\u043D\u0435\u0432\u0430 \u0434\u0438\u043D\u0430\u043C\u0456\u043A\u0430",
     subtitle: `${s.timeline.length} тижнів`
   }, /*#__PURE__*/React.createElement(AreaChart, {
     data: s.timeline,
     color: PALETTE.ink,
     h: 160,
-    monthTicks: true
-  }))), s.topProducts.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
+    monthTicks: true,
+    showY: true
+  }))), s.topProducts.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-top",
+    userEmail: userEmail,
     title: "\u0422\u043E\u043F \u0442\u043E\u0432\u0430\u0440\u0456\u0432",
     subtitle: "\u0417\u0430 \u0432\u0438\u0440\u0443\u0447\u043A\u043E\u044E \u0437 \u041F\u0414\u0412, \u0442\u043E\u043F 10"
   }, /*#__PURE__*/React.createElement("div", null, s.topProducts.slice(0, 10).map((p, i) => /*#__PURE__*/React.createElement("div", {
@@ -1776,15 +3555,29 @@ function SalesScreen({
       color: PALETTE.ink,
       fontWeight: 500
     }
-  }, fmt(p.gross))))))), s.payments.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
+  }, fmt(p.gross))))))), s.payments.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "sales-payments",
+    userEmail: userEmail,
     title: "\u0421\u043F\u043E\u0441\u043E\u0431\u0438 \u043E\u043F\u043B\u0430\u0442\u0438",
-    subtitle: "\u0417 \u041F\u0414\u0412"
+    subtitle: payMode === 'pct' ? '% розподіл' : 'З ПДВ',
+    right: /*#__PURE__*/React.createElement(ValueToggle, {
+      options: [{
+        id: 'pct',
+        label: '%'
+      }, {
+        id: 'uah',
+        label: '€'
+      }],
+      value: payMode,
+      onChange: setPayMode
+    })
   }, /*#__PURE__*/React.createElement(BarsH, {
     data: s.payments.map(p => ({
       name: p.name,
-      value: p.v
+      value: payMode === 'pct' ? p.pct : p.v
     })),
-    color: accent
+    color: accent,
+    showPct: payMode === 'pct'
   }))));
 }
 
@@ -1796,28 +3589,49 @@ function TrafficScreen({
   onPeriodChange,
   customRange,
   onCustomChange,
-  ratio
+  ratio,
+  userEmail,
+  onExportPdf
 }) {
   const t = data;
-  const [genderMode, setGenderMode] = React.useState('count');
+  const [selectedDow, setSelectedDow] = React.useState('all'); // 'all' | 1..6
+  const [hourMode, setHourMode] = React.useState('pct'); // 'pct' | 'count'
+  const [weeklyRange, setWeeklyRange] = React.useState('4'); // '4','8','16','all'
+
   if (!t.count) return /*#__PURE__*/React.createElement(EmptyState, {
     msg: "\u041D\u0435\u043C\u0430\u0454 \u0434\u0430\u043D\u0438\u0445 \u0442\u0440\u0430\u0444\u0456\u043A\u0443 \u0443 \u0432\u0438\u0431\u0440\u0430\u043D\u043E\u043C\u0443 \u043F\u0435\u0440\u0456\u043E\u0434\u0456"
   });
-  const genderTotal = (t.gender['Ч'] || 0) + (t.gender['Ж'] || 0) + (t.gender['-'] || 0) || 1;
-  const genderData = [{
-    name: 'Чоловіки',
-    v: t.gender['Ч'] || 0
+  const dowOptions = [{
+    id: 1,
+    label: 'Пн'
   }, {
-    name: 'Жінки',
-    v: t.gender['Ж'] || 0
+    id: 2,
+    label: 'Вт'
   }, {
-    name: 'Невідомо',
-    v: t.gender['-'] || 0
-  }].filter(x => x.v > 0).map(g => ({
-    name: g.name,
-    value: genderMode === 'pct' ? Math.round(g.v / genderTotal * 1000) / 10 : g.v
+    id: 3,
+    label: 'Ср'
+  }, {
+    id: 4,
+    label: 'Чт'
+  }, {
+    id: 5,
+    label: 'Пт'
+  }, {
+    id: 6,
+    label: 'Сб'
+  }, {
+    id: 'all',
+    label: 'Усе (пн-пт)'
+  }];
+  const hourlyData = (t.hourlyByDay?.[selectedDow] || []).map(x => ({
+    month: String(x.h).padStart(2, '0'),
+    v: hourMode === 'pct' ? x.pct || 0 : Math.round((x.avg || 0) * 10) / 10
   }));
-  const fromLabel = t.range ? fmtDate(t.range.from) : '';
+  const weeklyCount = weeklyRange === 'all' ? t.weekly.length : parseInt(weeklyRange, 10);
+  const weeklyData = t.weekly.slice(-weeklyCount);
+  const trend = t.last7Trend || {
+    deltaPct: null
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: 120
@@ -1827,20 +3641,28 @@ function TrafficScreen({
     subtitle: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u0432\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u043D\u043E\u0441\u0442\u0456"
   }), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+      alignItems: 'center',
       marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement(DateRangeLabel, {
-    range: t.range
+  }, /*#__PURE__*/React.createElement(DateRangeInline, {
+    range: t.range,
+    customFrom: customRange?.from,
+    customTo: customRange?.to,
+    onCustomChange: onCustomChange,
+    onActivate: () => onPeriodChange('custom'),
+    isActive: period === 'custom'
+  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
+    onClick: onExportPdf
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement(PeriodSelector, {
-    current: period,
-    onChange: onPeriodChange,
-    customFrom: customRange?.from,
-    customTo: customRange?.to,
-    onCustomChange: onCustomChange
+    current: period === 'custom' ? 'all' : period,
+    onChange: onPeriodChange
   }))), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -1851,108 +3673,231 @@ function TrafficScreen({
     label: "\u0423\u0441\u044C\u043E\u0433\u043E \u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432",
     value: fmt(t.totalVisitors),
     accent: accent,
-    hint: fromLabel ? `з ${fromLabel}` : ''
+    hint: t.currentWeek?.range ? `останній тижд: ${fmt(t.currentWeek.visitors)}` : ''
   }), /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u0421\u0435\u0440\u0435\u0434\u043D\u044F \u0442\u0440\u0438\u0432\u0430\u043B\u0456\u0441\u0442\u044C",
-    value: t.avgDuration ? t.avgDuration.toFixed(1) : '—',
-    hint: t.avgDuration ? 'хвилин' : ''
-  })), ratio && ratio.totalVisits > 0 && /*#__PURE__*/React.createElement("div", {
+    label: "\u041F\u0456\u043A \u0433\u043E\u0434\u0438\u043D\u0438",
+    value: t.peakHour != null ? String(t.peakHour).padStart(2, '0') + ':00' : '—',
+    hint: t.peakHourVisits ? `~${t.peakHourVisits} клієнтів (в середньому)` : 'в середньому за період'
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
       marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u041A\u043E\u043D\u0432\u0435\u0440\u0441\u0456\u044F",
-    value: fmtPct(ratio.conversion, 1),
-    hint: `${fmt(ratio.totalReceipts)} чеків / ${fmt(ratio.totalVisits)} відвідувачів`
-  }), /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u041F\u0456\u043A \u0433\u043E\u0434\u0438\u043D\u0438",
-    value: t.peakHour != null ? String(t.peakHour).padStart(2, '0') + ':00' : '—',
-    hint: t.peakHourVisits ? `${t.peakHourVisits} клієнтів` : ''
-  }))), t.monthly.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u041F\u043E \u043C\u0456\u0441\u044F\u0446\u044F\u043C",
-    subtitle: "\u0423\u043D\u0456\u043A\u0430\u043B\u044C\u043D\u0456 \u0432\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u0447\u0456"
+    label: "\u0421\u0435\u0440\u0435\u0434\u043D\u044F \u0442\u0440\u0438\u0432\u0430\u043B\u0456\u0441\u0442\u044C",
+    value: t.avgDuration ? t.avgDuration.toFixed(1) : '—',
+    hint: t.avgDuration ? 'хвилин' : ''
+  }), ratio && ratio.totalVisits > 0 ? /*#__PURE__*/React.createElement(BigStat, {
+    label: "\u041A\u043E\u0435\u0444\u0456\u0446\u0456\u0454\u043D\u0442",
+    value: ratio.ratio ? ratio.ratio.toFixed(1) : '—',
+    hint: "\u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432 \u043D\u0430 1 \u0447\u0435\u043A"
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }))), t.monthlyAllTime.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-monthly",
+    userEmail: userEmail,
+    title: "\u0412\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u043D\u0456\u0441\u0442\u044C \u043F\u043E \u043C\u0456\u0441\u044F\u0446\u044F\u043C",
+    subtitle: "\u043B\u044E\u0434\u0435\u0439, \u0437\u0430 \u0432\u0435\u0441\u044C \u0447\u0430\u0441"
   }, /*#__PURE__*/React.createElement(BarsV, {
-    data: t.monthly,
+    data: t.monthlyAllTime,
     keys: ['v'],
     colors: [PALETTE.ink],
     labelKey: "month",
-    h: 180
-  }))), t.weekday.some(d => d.v > 0) && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u041F\u043E \u0434\u043D\u044F\u0445 \u0442\u0438\u0436\u043D\u044F",
-    subtitle: "\u0421\u0443\u043C\u0430\u0440\u043D\u043E"
+    h: 180,
+    showY: true
+  }))), t.last7Days.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-last7",
+    userEmail: userEmail,
+    title: "\u0412\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u043D\u0456\u0441\u0442\u044C \xB7 \u041E\u0441\u0442\u0430\u043D\u043D\u0456 7 \u0434\u043D\u0456\u0432",
+    subtitle: trend.deltaPct != null ? `${trend.deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(trend.deltaPct).toFixed(0)}% vs попередній тиждень` : 'за останні 7 днів'
   }, /*#__PURE__*/React.createElement(BarsV, {
-    data: t.weekday,
+    data: t.last7Days,
     keys: ['v'],
     colors: [accent],
     labelKey: "day",
-    h: 160
-  }))), t.hourly.some(h => h.v > 0) && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u041F\u043E \u0433\u043E\u0434\u0438\u043D\u0430\u0445",
-    subtitle: "\u0421\u0443\u043C\u0430\u0440\u043D\u043E"
+    h: 160,
+    showY: true
+  }))), ratio && ratio.totalReceipts > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-ratio",
+    userEmail: userEmail,
+    title: "\u041A\u043E\u0435\u0444\u0456\u0446\u0456\u0454\u043D\u0442",
+    subtitle: "\u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432 \u043D\u0430 1 \u0447\u0435\u043A (\u0437\u0430 \u0443\u0432\u0435\u0441\u044C \u043F\u0435\u0440\u0456\u043E\u0434)"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '16px 0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SC_MONO,
+      fontSize: 42,
+      lineHeight: 1,
+      color: PALETTE.ink,
+      fontWeight: 600
+    }
+  }, ratio.ratio.toFixed(1)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SC_MONO,
+      fontSize: 10,
+      color: PALETTE.muted,
+      marginTop: 8,
+      letterSpacing: 0.5
+    }
+  }, fmt(ratio.totalVisits), " \u0432\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u0447\u0456\u0432 \xB7 ", fmt(ratio.totalReceipts), " \u0447\u0435\u043A\u0456\u0432")))), t.weekday.some(d => d.v > 0) && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-weekday",
+    userEmail: userEmail,
+    title: "\u041F\u043E \u0434\u043D\u044F\u0445 \u0442\u0438\u0436\u043D\u044F",
+    subtitle: "\u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432 \u0443\u0441\u044C\u043E\u0433\u043E"
   }, /*#__PURE__*/React.createElement(BarsV, {
-    data: t.hourly.filter(h => h.h >= 8 && h.h <= 22).map(h => ({
-      month: String(h.h).padStart(2, '0'),
-      v: h.v
-    })),
+    data: t.weekday.filter(d => d.v > 0),
+    keys: ['v'],
+    colors: [accent],
+    labelKey: "day",
+    h: 160,
+    showY: true
+  }))), hourlyData.some(h => h.v > 0) && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-hourly",
+    userEmail: userEmail,
+    title: "\u0412 \u0441\u0435\u0440\u0435\u0434\u043D\u044C\u043E\u043C\u0443 \u043F\u043E \u0433\u043E\u0434\u0438\u043D\u0430\u0445",
+    subtitle: `${selectedDow === 'all' ? 'пн-пт' : WEEK_UA_FULL[selectedDow]} · ${hourMode === 'pct' ? '% клієнтів' : 'клієнтів на день'} по годинах`
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12,
+      overflowX: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 4,
+      minWidth: 'max-content'
+    }
+  }, dowOptions.map(o => {
+    const active = selectedDow == o.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: o.id,
+      onClick: () => setSelectedDow(o.id),
+      style: {
+        padding: '5px 10px',
+        borderRadius: 100,
+        whiteSpace: 'nowrap',
+        background: active ? PALETTE.ink : 'transparent',
+        border: `1px solid ${active ? PALETTE.ink : PALETTE.line}`,
+        color: active ? '#f1ead8' : PALETTE.ink,
+        fontFamily: SC_MONO,
+        fontSize: 9,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        cursor: 'pointer'
+      }
+    }, o.label);
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'inline-flex',
+      gap: 0,
+      border: `1px solid ${PALETTE.rule}`,
+      borderRadius: 999,
+      padding: 2,
+      background: PALETTE.paperSub
+    }
+  }, [{
+    v: 'pct',
+    l: '%'
+  }, {
+    v: 'count',
+    l: 'клієнтів'
+  }].map(o => {
+    const active = hourMode === o.v;
+    return /*#__PURE__*/React.createElement("button", {
+      key: o.v,
+      onClick: () => setHourMode(o.v),
+      style: {
+        border: 'none',
+        background: active ? PALETTE.ink : 'transparent',
+        color: active ? PALETTE.paper : PALETTE.muted,
+        fontFamily: SC_MONO,
+        fontSize: 10,
+        fontWeight: 500,
+        padding: '4px 12px',
+        borderRadius: 999,
+        cursor: 'pointer',
+        letterSpacing: '0.02em'
+      }
+    }, o.l);
+  }))), /*#__PURE__*/React.createElement(BarsV, {
+    data: hourlyData,
     keys: ['v'],
     colors: [PALETTE.ink],
     labelKey: "month",
-    h: 160
-  }))), genderData.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0421\u0442\u0430\u0442\u044C",
-    subtitle: genderMode === 'count' ? 'Кількість клієнтів' : '% розподіл',
-    right: /*#__PURE__*/React.createElement(ValueToggle, {
-      options: [{
-        id: 'count',
-        label: '#'
-      }, {
-        id: 'pct',
-        label: '%'
-      }],
-      value: genderMode,
-      onChange: setGenderMode
-    })
+    h: 160,
+    showY: true,
+    isPct: hourMode === 'pct'
+  }))), t.ageGroupsAllTime.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-age",
+    userEmail: userEmail,
+    title: "\u041F\u043E \u0432\u0456\u043A\u0443",
+    subtitle: "% \u0437\u0430 \u0432\u0435\u0441\u044C \u043F\u0435\u0440\u0456\u043E\u0434"
   }, /*#__PURE__*/React.createElement(BarsH, {
-    data: genderData,
-    color: accent,
-    showPct: genderMode === 'pct'
-  }))), t.ageGroups.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0412\u0456\u043A",
-    subtitle: "\u0420\u043E\u0437\u043F\u043E\u0434\u0456\u043B \u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432"
-  }, /*#__PURE__*/React.createElement(BarsH, {
-    data: t.ageGroups.map(a => ({
+    data: t.ageGroupsAllTime.map(a => ({
       name: a.name,
-      value: a.v
+      value: a.pct
     })),
-    color: PALETTE.olive
-  }))), t.durationBuckets.some(b => b.v > 0) && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0422\u0440\u0438\u0432\u0430\u043B\u0456\u0441\u0442\u044C \u0432\u0456\u0437\u0438\u0442\u0443",
-    subtitle: "\u0420\u043E\u0437\u043F\u043E\u0434\u0456\u043B"
+    color: PALETTE.olive,
+    showPct: true
+  }))), t.genderAllTime.length > 0 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-gender",
+    userEmail: userEmail,
+    title: "\u041F\u043E \u0441\u0442\u0430\u0442\u0456",
+    subtitle: "% \u0437\u0430 \u0432\u0435\u0441\u044C \u043F\u0435\u0440\u0456\u043E\u0434 (\u0431\u0435\u0437 \xAB\u043D\u0435\u0432\u0456\u0434\u043E\u043C\u043E\xBB)"
   }, /*#__PURE__*/React.createElement(BarsH, {
-    data: t.durationBuckets.filter(b => b.v > 0).map(b => ({
-      name: b.label,
-      value: b.v
+    data: t.genderAllTime.map(g => ({
+      name: g.name,
+      value: g.pct
     })),
-    color: PALETTE.ink
-  }))), ratio && ratio.daily && ratio.daily.length > 1 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0412\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u0447\u0456 vs \u0447\u0435\u043A\u0438",
-    subtitle: "\u041F\u043E \u0434\u043D\u044F\u0445"
-  }, /*#__PURE__*/React.createElement(BarsV2, {
-    data: ratio.daily.slice(-14).map(d => ({
-      month: d.date.slice(8, 10) + '.' + d.date.slice(5, 7),
-      visits: d.visits,
-      receipts: d.receipts
-    })),
-    keyA: "visits",
-    keyB: "receipts",
-    labelA: "\u0412\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u0447\u0456",
-    labelB: "\u0427\u0435\u043A\u0438",
-    colorA: accent,
-    colorB: PALETTE.ink,
-    labelKey: "month",
-    h: 160
+    color: accent,
+    showPct: true
+  }))), t.weekly.length > 1 && /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(CommentableCard, {
+    id: "traffic-weekly",
+    userEmail: userEmail,
+    title: "\u0412\u0456\u0434\u0432\u0456\u0434\u0443\u0432\u0430\u043D\u0456\u0441\u0442\u044C \u043F\u043E \u0442\u0438\u0436\u043D\u044F\u0445",
+    subtitle: "\u043A\u043B\u0456\u0454\u043D\u0442\u0456\u0432",
+    right: /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 2,
+        background: '#ede5d0',
+        padding: 2,
+        borderRadius: 8
+      }
+    }, [['4', '4т'], ['8', '8т'], ['16', '16т'], ['all', 'Все']].map(([id, label]) => {
+      const active = weeklyRange === id;
+      return /*#__PURE__*/React.createElement("button", {
+        key: id,
+        onClick: () => setWeeklyRange(id),
+        style: {
+          padding: '4px 8px',
+          borderRadius: 6,
+          background: active ? '#fffbf0' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: SC_MONO,
+          fontSize: 9,
+          letterSpacing: 0.6,
+          color: active ? PALETTE.ink : PALETTE.muted
+        }
+      }, label);
+    }))
+  }, /*#__PURE__*/React.createElement(AreaChart, {
+    data: weeklyData,
+    color: PALETTE.ink,
+    h: 180,
+    monthTicks: true,
+    showY: true
   }))));
 }
 function EmptyState({
@@ -1969,63 +3914,6 @@ function EmptyState({
   }, msg);
 }
 
-// ── HOME ───────────────────────────────
-function HomeScreen({
-  sales,
-  traffic,
-  accent,
-  updated,
-  source
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      paddingBottom: 120
-    }
-  }, /*#__PURE__*/React.createElement(ScreenHeader, {
-    title: "Overview",
-    subtitle: updatedLabel(updated, source)
-  }), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456",
-    subtitle: sales.range ? dateRangeLabel(sales.range) : ''
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u0417 \u041F\u0414\u0412",
-    value: fmt(sales.totals.gross),
-    accent: accent
-  }), /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u041F\u0440\u0438\u0431\u0443\u0442\u043E\u043A",
-    value: fmt(sales.totals.profit)
-  }))), /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0422\u0440\u0430\u0444\u0456\u043A",
-    subtitle: traffic.range ? dateRangeLabel(traffic.range) : ''
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u041A\u043B\u0456\u0454\u043D\u0442\u0438",
-    value: fmt(traffic.totalVisitors),
-    accent: accent
-  }), /*#__PURE__*/React.createElement(BigStat, {
-    label: "\u041E\u043F\u0435\u0440\u0430\u0446\u0456\u0439",
-    value: fmt(sales.count)
-  }))), sales.monthly.length > 0 && /*#__PURE__*/React.createElement(ChartCard, {
-    title: "\u0414\u0438\u043D\u0430\u043C\u0456\u043A\u0430",
-    subtitle: "\u041F\u0440\u043E\u0434\u0430\u0436\u0456 \u043F\u043E \u043C\u0456\u0441\u044F\u0446\u044F\u043C"
-  }, /*#__PURE__*/React.createElement(BarsV, {
-    data: sales.monthly,
-    keys: ['total'],
-    colors: [PALETTE.ink],
-    labelKey: "month",
-    h: 160
-  }))));
-}
-
 // ── INFO ──────────────────────────────
 function CopyButton({
   text
@@ -2037,7 +3925,6 @@ function CopyButton({
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {
-      // fallback
       const ta = document.createElement('textarea');
       ta.value = text;
       document.body.appendChild(ta);
@@ -2140,9 +4027,9 @@ function InfoCard({
   })), /*#__PURE__*/React.createElement("div", null, children));
 }
 function InfoScreen() {
-  const companyFull = 'KATAFOT S.L.\nBizkaia Kalea 63, 20800 Zarautz, Spain\nNIF: B56990062';
+  const companyFull = 'KATAFOT S.L.\nBizkaia Kalea 63, 20800 Zarautz, Spain\nNIF: B56990062\nVAT: ESB56990062';
   const ibanValue = 'ES12 0049 5287 7123 1636 9268';
-  const shippingFull = 'KATAFOT SL (Adicto.Bike)\nCapusceac Vasile\nBizkaia Kalea 63, 20800, Zarautz, Gipuzkoa, Spain\n+34 674 262 622';
+  const shippingFull = 'KATAFOT SL (Adicto.Bike)\nCapusceac Vasile\nBizkaia Kalea 63, 20800, Zarautz, Gipuzkoa, Spain\n+34 674 262 622\nhello@adicto.bike';
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: 120
@@ -2162,6 +4049,10 @@ function InfoScreen() {
   }), /*#__PURE__*/React.createElement(InfoRow, {
     label: "NIF (CIF)",
     value: "B56990062"
+  }), /*#__PURE__*/React.createElement(InfoRow, {
+    label: "VAT",
+    value: "ESB56990062",
+    copyText: "ESB56990062"
   })), /*#__PURE__*/React.createElement(InfoCard, {
     title: "Bank \u2014 Banco Santander"
   }, /*#__PURE__*/React.createElement(InfoRow, {
@@ -2186,56 +4077,39 @@ function InfoScreen() {
     value: "Bizkaia Kalea 63, 20800, Zarautz, Gipuzkoa, Spain"
   }), /*#__PURE__*/React.createElement(InfoRow, {
     label: "Phone",
-    value: "+34 674 262 622"
+    value: "+34 674 262 622",
+    copyText: "+34674262622"
+  }), /*#__PURE__*/React.createElement(InfoRow, {
+    label: "Email",
+    value: "hello@adicto.bike",
+    copyText: "hello@adicto.bike"
   }))));
 }
 
-// ── MORE (У розробці) ─────────────────
+// ── MORE ─────────────────
 function MoreScreen({
   userEmail,
   onLogout
 }) {
+  const {
+    NotesSection,
+    FilesSection,
+    SubscriptionsSection
+  } = window.MORE_EXTRAS || {};
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: 120
     }
   }, /*#__PURE__*/React.createElement(ScreenHeader, {
-    title: "More"
-  }), /*#__PURE__*/React.createElement(Section, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fffbf0',
-      border: `1px dashed ${PALETTE.line}`,
-      borderRadius: 12,
-      padding: '40px 20px',
-      textAlign: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 46,
-      marginBottom: 16,
-      opacity: 0.4
-    }
-  }, "\u25D0"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: SC_MONO,
-      fontSize: 18,
-      letterSpacing: 1.5,
-      textTransform: 'uppercase',
-      color: PALETTE.ink,
-      fontWeight: 600,
-      marginBottom: 8
-    }
-  }, "\u0412 \u0420\u041E\u0417\u0420\u041E\u0411\u0426\u0406"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: SC_MONO,
-      fontSize: 10,
-      color: PALETTE.subtle,
-      letterSpacing: 0.4,
-      lineHeight: 1.6,
-      maxWidth: 260,
-      margin: '0 auto'
-    }
-  }, "\u0422\u0443\u0442 \u0437'\u044F\u0432\u043B\u044F\u0442\u044C\u0441\u044F \u0434\u043E\u0434\u0430\u0442\u043A\u043E\u0432\u0456 \u043D\u0430\u043B\u0430\u0448\u0442\u0443\u0432\u0430\u043D\u043D\u044F, \u0435\u043A\u0441\u043F\u043E\u0440\u0442 \u0437\u0432\u0456\u0442\u0456\u0432 \u0442\u0430 \u0456\u043D\u0448\u0456 \u0444\u0443\u043D\u043A\u0446\u0456\u0457.")), /*#__PURE__*/React.createElement("div", {
+    title: "More",
+    subtitle: "\u041D\u043E\u0442\u0430\u0442\u043A\u0438, \u0444\u0430\u0439\u043B\u0438 \u0442\u0430 \u043F\u0456\u0434\u043F\u0438\u0441\u043A\u0438"
+  }), /*#__PURE__*/React.createElement(Section, null, NotesSection && /*#__PURE__*/React.createElement(NotesSection, {
+    userEmail: userEmail
+  }), FilesSection && /*#__PURE__*/React.createElement(FilesSection, {
+    userEmail: userEmail
+  }), SubscriptionsSection && /*#__PURE__*/React.createElement(SubscriptionsSection, {
+    userEmail: userEmail
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14,
       background: '#fffbf0',
@@ -2283,10 +4157,6 @@ function updatedLabel(iso, source) {
   const pad = n => String(n).padStart(2, '0');
   const src = source === 'cache' ? ' · кеш' : '';
   return `Оновлено ${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}${src}`;
-}
-function dateRangeLabel(range) {
-  const f = d => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
-  return `${f(range.from)} — ${f(range.to)}`;
 }
 function LastUpdatedFooter({
   updated,
@@ -2365,6 +4235,7 @@ window.SCREENS = {
 };
 })();
 
+
 ;(function(){
 // LoginGate — простий email+пароль gate.
 // Credentials хардкодом (немає сервера). Для 2 користувачів цього достатньо.
@@ -2375,6 +4246,9 @@ const CREDENTIALS = [{
   password: 'Scalpel2012!'
 }, {
   email: 'maximiva@gmail.com',
+  password: 'Tornado80!'
+}, {
+  email: 'olegivanov578@gmail.com',
   password: 'Tornado80!'
 }];
 const SESSION_KEY = 'adicto.session.v1';
