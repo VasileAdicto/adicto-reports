@@ -41,7 +41,7 @@
 <div id="root">
   <div style="padding:80px 40px;text-align:center;font-family:'JetBrains Mono',monospace;color:#8a7d69;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;">Loading…</div>
 </div>
-<script src="bundle.js?v=20260417b"></script>
+<script src="bundle.js?v=20260417c"></script>
 <script>
 (function(){
 const {
@@ -236,7 +236,8 @@ function TopBar({
   onRefresh,
   loading,
   source,
-  error
+  error,
+  onLiveAI
 }) {
   const dot = source === 'live' ? '#7aa875' : source === 'cache' ? '#c4a04e' : PALETTE.muted;
   return /*#__PURE__*/React.createElement("div", {
@@ -271,7 +272,9 @@ function TopBar({
       color: PALETTE.ink,
       fontWeight: 600
     }
-  }, "ADICTO.BIKE")), /*#__PURE__*/React.createElement("div", {
+  }, "ADICTO.BIKE")),
+  onLiveAI && /*#__PURE__*/React.createElement(window.LiveAIButton, { onClick: onLiveAI }),
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -425,6 +428,7 @@ function App() {
     return v ? v === 'inf' ? Infinity : parseInt(v, 10) : Infinity;
   });
   const [errorShown, setErrorShown] = React.useState(true);
+  const [liveAIOpen, setLiveAIOpen] = React.useState(false);
   const accent = 'rgb(92, 158, 219)';
   const handleLogout = () => {
     clearSession();
@@ -606,7 +610,8 @@ function App() {
     onRefresh: store.refresh,
     loading: store.loading,
     source: store.source,
-    error: errorShown ? store.error : null
+    error: errorShown ? store.error : null,
+    onLiveAI: hasAnyData ? () => setLiveAIOpen(true) : null
   }), errorShown && store.error && hasAnyData && /*#__PURE__*/React.createElement(ErrorBanner, {
     error: store.error,
     onDismiss: () => setErrorShown(false)
@@ -625,6 +630,12 @@ function App() {
     current: tab,
     onTab: setTab,
     accent: accent
+  }), /*#__PURE__*/React.createElement(window.LiveAIModal, {
+    open: liveAIOpen,
+    onClose: () => setLiveAIOpen(false),
+    sales, traffic, ratio,
+    period,
+    screenName: tab === 'sales' ? 'Sales' : tab === 'traffic' ? 'Traffic' : 'Overview'
   }));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
