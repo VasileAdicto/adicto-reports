@@ -5282,7 +5282,7 @@ function LiveAIModal({
       color: '#5a5044',
       marginTop: 6
     }
-  }, phase === 'gen-text' ? 'Формую звіт з ваших даних' : 'ElevenLabs ~ 3-8 секунд')) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, phase === 'gen-text' ? 'Gemini 2.5 Pro · глибокий аналіз ~ 20-40 секунд' : 'ElevenLabs ~ 3-8 секунд')) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#fffbf0',
       border: `1px solid ${LA_P.ink}`,
