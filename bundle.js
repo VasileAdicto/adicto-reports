@@ -1444,33 +1444,20 @@ function Section({
   }, children);
 }
 
-// Маленьке лого (коло з велосипедним штрихом)
+// Справжнє лого ADICTO (чорна версія)
 function AdictoLogo({
   size = 22
 }) {
-  return /*#__PURE__*/React.createElement("svg", {
+  return /*#__PURE__*/React.createElement("img", {
+    src: "logo.png",
     width: size,
     height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
+    alt: "ADICTO",
     style: {
-      flexShrink: 0
+      flexShrink: 0,
+      display: 'block'
     }
-  }, /*#__PURE__*/React.createElement("circle", {
-    cx: "12",
-    cy: "12",
-    r: "11",
-    fill: PALETTE.ink
-  }), /*#__PURE__*/React.createElement("text", {
-    x: "12",
-    y: "16",
-    fontSize: "11",
-    fontFamily: SC_MONO,
-    fill: "#f1ead8",
-    textAnchor: "middle",
-    fontWeight: "700",
-    letterSpacing: "-0.5"
-  }, "A"));
+  });
 }
 function ScreenHeader({
   title,
