@@ -4530,8 +4530,8 @@ window.AUTH = {
 })();
 ;(function(){
 // ── Live AI: голосові аудіо-звіти ──
-// Текст генерується через window.claude.complete() (вбудовано в artifacts)
-// Озвучка — через проксі Apps Script (ELEVENLABS_API_KEY у ScriptProperties)
+// Текст генерується через Gemini 2.5 Pro (проксі Apps Script, GEMINI_API_KEY)
+// Озвучка — через проксі Apps Script (ELEVENLABS_API_KEY)
 // Стиль: фірмові ADICTO-кольори (paper/ink, JetBrains Mono)
 
 const ELEVEN_MODEL = 'eleven_multilingual_v2';
@@ -4758,45 +4758,40 @@ function buildDataSummary(sales, traffic, context) {
   return lines.join('\n');
 }
 
-// ── Генерація тексту звіту через Claude ──
+// ── Генерація тексту звіту через Gemini (проксі Apps Script) ──
+async function aiReportProxy(payload) {
+  const apiUrl = window.ADICTO_CONFIG?.apiUrl;
+  if (!apiUrl) throw new Error('ADICTO_CONFIG.apiUrl не налаштовано');
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'aiReport', payload })
+  });
+  if (!res.ok) throw new Error('Proxy ' + res.status);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'AI proxy error');
+  return data.text;
+}
 async function generateReportText({
   depth,
   topics,
   dataSummary,
-  compareWeeks
+  compareWeeks,
+  screenName,
+  period
 }) {
-  const lengthMap = {
-    short: 'близько 80 слів (1 хв озвучки)',
-    medium: 'близько 220 слів (2-3 хв озвучки)',
-    long: 'близько 450 слів (3-4 хв озвучки)'
-  };
-  const topicParts = [];
-  if (topics.sales) topicParts.push('тенденції продажів (середній чек, покупці, динаміка, майстерня)');
-  if (topics.traffic) topicParts.push('трафік (клієнти, тривалість, конверсія, пікові години)');
-  if (topics.advice) topicParts.push('2-3 конкретні поради: що посилити, на що звернути увагу, коли діяти');
-  const system = `Ти бізнес-аналітик магазину велосипедів ADICTO.bike у Валенсії.
-Твоя задача — розповісти власнику Василю про стан бізнесу голосом, як під час звіту.
-
-ВИМОГИ:
-- Пиши українською, природною розмовною мовою, але професійно.
-- Текст буде озвучено TTS — пиши цифри словами (не "124", а "сто двадцять чотири"; не "€", а "євро"; не "%", а "відсотків").
-- Уникай списків і маркерів — це аудіо, не візуал. Плавні переходи між думками.
-- Обсяг: ${lengthMap[depth]}.
-- Порівнюй поточний період з періодом ${compareWeeks} тижнів(а) тому.
-- Починай зі слова "Звіт" або "Розпочнемо з…". Не вітайся.
-- В кінці скажи "Дякую, на цьому звіт завершено" (тільки якщо обсяг medium/long).
-- ТЕМИ ДЛЯ ЗВІТУ: ${topicParts.join('; ')}.
-- Якщо даних по якійсь темі немає — пропусти її, не вигадуй.
-
-Ось дані:
-${dataSummary}`;
-  const messages = [{
-    role: 'user',
-    content: 'Склади аудіо-звіт за цими даними.'
-  }];
-  return await window.claude.complete({
-    system,
-    messages
+  const topicList = [];
+  if (topics.sales) topicList.push('продажі');
+  if (topics.traffic) topicList.push('трафік');
+  if (topics.advice) topicList.push('поради');
+  const depthMap = { short: 'brief', medium: 'medium', long: 'detailed' };
+  return await aiReportProxy({
+    screen: screenName || 'Огляд',
+    period: period || '',
+    topics: topicList,
+    depth: depthMap[depth] || 'medium',
+    tone: 'neutral',
+    data: { summary: dataSummary, compareWeeks }
   });
 }
 
@@ -4867,7 +4862,9 @@ function LiveAIModal({
         depth,
         topics,
         dataSummary,
-        compareWeeks: compareN
+        compareWeeks: compareN,
+        screenName,
+        period
       });
       setReportText(text);
       setPhase('gen-audio');
@@ -4924,20 +4921,15 @@ function LiveAIModal({
     setChatHistory(newHist);
     setChatBusy(true);
     try {
-      const system = `Ти бізнес-аналітик магазину велосипедів ADICTO.bike. Користувач щойно прослухав голосовий звіт. Відповідай коротко (2-3 речення), українською, конкретно, опираючись на дані.
-
-ТЕКСТ ЗВІТУ:
-${reportText}
-
-ПОВНІ ДАНІ:
-${dataSummary}`;
-      const messages = [...newHist.map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.text
-      }))];
-      const answer = await window.claude.complete({
-        system,
-        messages
+      const answer = await aiReportProxy({
+        screen: screenName || 'Огляд',
+        period: period || '',
+        topics: [],
+        depth: 'brief',
+        tone: 'friendly',
+        data: { summary: dataSummary },
+        followupQuestion: q,
+        previousText: reportText
       });
       setChatHistory([...newHist, {
         role: 'bot',
